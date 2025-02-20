@@ -1,0 +1,16 @@
+/* src/app.css */
+html,
+body {
+	margin: 0;
+	padding: 0;
+	background-color: rgba(17, 18, 18, 0.819);
+	font-family: 'Montserrat', sans-serif;
+	color: #e5e5e5;
+	height: 100vh;
+}
+
+a,
+a:visited {
+	color: white;
+	text-decoration: none;
+}

@@ -77,53 +77,39 @@
 </div>
 
 <style>
-	/* Basic styles for the chat UI */
 	.chat-container {
-		max-width: 600px;
-		margin: 0 auto;
-		padding: 20px;
-		border: 1px solid #ddd;
-		border-radius: 8px;
+		display: flex;
+		flex-direction: column;
+		height: 100vh;
 	}
 
 	.messages {
-		max-height: 400px;
+		flex: 1;
 		overflow-y: auto;
-		margin-bottom: 20px;
+		padding: 1rem;
 	}
 
 	.message {
-		padding: 10px;
-		margin-bottom: 10px;
-		border-radius: 5px;
+		margin-bottom: 0.5rem;
 	}
 
 	.message.user {
-		background-color: #daf8e3;
 		text-align: right;
-	}
-
-	.message.assistant {
-		background-color: #f1f1f1;
 	}
 
 	.input-area {
 		display: flex;
+		padding: 1rem;
 	}
 
-	.input-area input {
+	input {
 		flex: 1;
-		padding: 10px;
-		border: 1px solid #ddd;
-		border-radius: 4px;
+		padding: 0.5rem;
+		font-size: 1rem;
 	}
 
-	.input-area button {
-		margin-left: 10px;
-		padding: 10px;
-		border: none;
-		background-color: #007bff;
-		color: white;
-		border-radius: 4px;
+	button {
+		padding: 0.5rem 1rem;
+		font-size: 1rem;
 	}
 </style>
