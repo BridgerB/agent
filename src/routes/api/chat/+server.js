@@ -9,7 +9,8 @@ export const POST = async ({ request }) => {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
-				model: 'deepseek-r1:14b',
+				// model: 'deepseek-r1:14b',
+				model: 'llama3.1:8b',
 				messages,
 				stream: true
 			})
