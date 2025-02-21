@@ -4,24 +4,11 @@
 	import ChatMessage from '$lib/components/ChatMessage.svelte';
 	import ChatInput from '$lib/components/ChatInput.svelte';
 	import Editor from '$lib/components/Editor.svelte';
-	import FileTree from '$lib/components/FileTree.svelte';
 
 	let userMessage = '';
 	let messages = writable([]);
 	let messageContainer;
 	let editorValue = '// Write your code here...';
-
-	// Sample files for the file tree
-	const files = [
-		{ name: 'src/app.css', content: '/* CSS content */' },
-		{ name: 'src/app.html', content: '<!-- HTML content -->' },
-		{ name: 'src/routes/+page.svelte', content: '<!-- Svelte content -->' },
-		{ name: 'src/lib/components/Editor.svelte', content: '<!-- Editor component -->' }
-	];
-
-	function handleFileSelect(file) {
-		editorValue = file.content;
-	}
 
 	// Auto-scroll to bottom when messages update
 	$: if (messageContainer && $messages) {
@@ -101,7 +88,6 @@
 		<ChatInput bind:userMessage onSendMessage={handleSendMessage} />
 	</div>
 	<div class="editor-container">
-		<FileTree {files} onFileSelect={handleFileSelect} />
 		<div class="editor-wrapper">
 			<Editor bind:value={editorValue} height="100%" />
 		</div>
