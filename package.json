@@ -47,6 +47,7 @@
 		"@fortawesome/fontawesome-free": "^6.7.2",
 		"drizzle-orm": "^0.38.4",
 		"postgres": "^3.4.5",
-		"the-new-css-reset": "^1.11.3"
+		"the-new-css-reset": "^1.11.3",
+		"vm2": "^3.9.19"
 	}
 }
