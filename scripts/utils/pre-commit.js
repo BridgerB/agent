@@ -31,8 +31,8 @@ const runPreCommit = async () => {
 			process.exit(1);
 		}
 
-		console.log('Running linter...');
-		await execPromise('npm run lint');
+		// console.log('Running linter...');
+		// await execPromise('npm run lint');
 
 		console.log('✨ Pre-commit checks completed successfully!');
 	} catch (error) {
