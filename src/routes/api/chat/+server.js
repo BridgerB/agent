@@ -4,22 +4,22 @@ import { VM } from 'vm2';
 
 // Function to execute code safely
 async function executeCode(code) {
-    const vm = new VM({
-        timeout: 5000,
-        sandbox: {
-            console: {
-                log: (...args) => {
-                    output.push(...args);
-                }
-            }
-        }
-    });
+	const vm = new VM({
+		timeout: 5000,
+		sandbox: {
+			console: {
+				log: (...args) => {
+					output.push(...args);
+				}
+			}
+		}
+	});
 
-    const output = [];
-    
-    try {
-        // Wrap code to capture return value
-        const wrappedCode = `
+	const output = [];
+
+	try {
+		// Wrap code to capture return value
+		const wrappedCode = `
             (function() {
                 const result = (async () => {
                     ${code}
@@ -28,19 +28,19 @@ async function executeCode(code) {
             })()
         `;
 
-        const result = await vm.run(wrappedCode);
-        return {
-            success: true,
-            result,
-            output
-        };
-    } catch (error) {
-        return {
-            success: false,
-            error: error.message,
-            output
-        };
-    }
+		const result = await vm.run(wrappedCode);
+		return {
+			success: true,
+			result,
+			output
+		};
+	} catch (error) {
+		return {
+			success: false,
+			error: error.message,
+			output
+		};
+	}
 }
 
 // Updated system prompt with clearer execution instructions
@@ -74,97 +74,97 @@ Remember:
 - Explain results after execution`;
 
 export const POST = async ({ request }) => {
-    try {
-        const { messages } = await request.json();
-        
-        // Add system prompt to the beginning of the conversation
-        const augmentedMessages = [
-            { role: 'system', content: systemPrompt },
-            ...messages
-        ];
+	try {
+		const { messages } = await request.json();
 
-        let currentCodeBlock = '';
-        let isCollectingCode = false;
-        let shouldExecuteCode = false;
+		// Add system prompt to the beginning of the conversation
+		const augmentedMessages = [{ role: 'system', content: systemPrompt }, ...messages];
 
-        const chatResponse = await fetch('http://localhost:11434/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                model: 'llama3.1:8b',
-                messages: augmentedMessages,
-                stream: true
-            })
-        });
+		let currentCodeBlock = '';
+		let isCollectingCode = false;
+		let shouldExecuteCode = false;
 
-        // Create stream transformer to handle code execution
-        const transformer = new TransformStream({
-            async transform(chunk, controller) {
-                const text = new TextDecoder().decode(chunk);
-                const lines = text.split('\n').filter(Boolean);
+		const chatResponse = await fetch('http://localhost:11434/api/chat', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				model: 'llama3.1:8b',
+				messages: augmentedMessages,
+				stream: true
+			})
+		});
 
-                for (const line of lines) {
-                    const parsed = JSON.parse(line);
-                    if (!parsed.message?.content) continue;
+		// Create stream transformer to handle code execution
+		const transformer = new TransformStream({
+			async transform(chunk, controller) {
+				const text = new TextDecoder().decode(chunk);
+				const lines = text.split('\n').filter(Boolean);
 
-                    const content = parsed.message.content;
-                    
-                    // Check for code block start
-                    if (content.includes('```javascript')) {
-                        isCollectingCode = true;
-                        currentCodeBlock = '';
-                        controller.enqueue(chunk);
-                        continue;
-                    }
-                    
-                    // Check for code block end
-                    if (isCollectingCode && content.includes('```')) {
-                        isCollectingCode = false;
-                        shouldExecuteCode = true;
-                        controller.enqueue(chunk);
-                        continue;
-                    }
-                    
-                    // Collect code
-                    if (isCollectingCode) {
-                        currentCodeBlock += content;
-                    }
-                    
-                    // Check for execution trigger
-                    if (!isCollectingCode && shouldExecuteCode && content.toLowerCase().includes('running the code')) {
-                        shouldExecuteCode = false;
-                        // Execute the collected code
-                        const result = await executeCode(currentCodeBlock);
-                        
-                        // Send execution results
-                        const resultMessage = {
-                            message: {
-                                role: 'assistant',
-                                content: `\nExecution results:\n${
-                                    result.success 
-                                        ? `${result.output.length ? 'Output:\n' + result.output.join('\n') : ''}${
-                                            result.result !== undefined ? '\nReturn value: ' + result.result : ''
-                                          }`
-                                        : `Error: ${result.error}`
-                                }\n`
-                            }
-                        };
-                        controller.enqueue(new TextEncoder().encode(JSON.stringify(resultMessage) + '\n'));
-                    }
-                    
-                    controller.enqueue(chunk);
-                }
-            }
-        });
+				for (const line of lines) {
+					const parsed = JSON.parse(line);
+					if (!parsed.message?.content) continue;
 
-        return new Response(chatResponse.body.pipeThrough(transformer), {
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
+					const content = parsed.message.content;
 
-    } catch (error) {
-        console.error('Error in chat request:', error);
-        return json({ error: 'Failed to process request' }, { status: 500 });
-    }
+					// Check for code block start
+					if (content.includes('```javascript')) {
+						isCollectingCode = true;
+						currentCodeBlock = '';
+						controller.enqueue(chunk);
+						continue;
+					}
+
+					// Check for code block end
+					if (isCollectingCode && content.includes('```')) {
+						isCollectingCode = false;
+						shouldExecuteCode = true;
+						controller.enqueue(chunk);
+						continue;
+					}
+
+					// Collect code
+					if (isCollectingCode) {
+						currentCodeBlock += content;
+					}
+
+					// Check for execution trigger
+					if (
+						!isCollectingCode &&
+						shouldExecuteCode &&
+						content.toLowerCase().includes('running the code')
+					) {
+						shouldExecuteCode = false;
+						// Execute the collected code
+						const result = await executeCode(currentCodeBlock);
+
+						// Send execution results
+						const resultMessage = {
+							message: {
+								role: 'assistant',
+								content: `\nExecution results:\n${
+									result.success
+										? `${result.output.length ? 'Output:\n' + result.output.join('\n') : ''}${
+												result.result !== undefined ? '\nReturn value: ' + result.result : ''
+											}`
+										: `Error: ${result.error}`
+								}\n`
+							}
+						};
+						controller.enqueue(new TextEncoder().encode(JSON.stringify(resultMessage) + '\n'));
+					}
+
+					controller.enqueue(chunk);
+				}
+			}
+		});
+
+		return new Response(chatResponse.body.pipeThrough(transformer), {
+			headers: {
+				'Content-Type': 'application/json'
+			}
+		});
+	} catch (error) {
+		console.error('Error in chat request:', error);
+		return json({ error: 'Failed to process request' }, { status: 500 });
+	}
 };
