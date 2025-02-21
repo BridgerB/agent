@@ -3,79 +3,117 @@
 	export let files = [];
 	export let onFileSelect = () => {};
 
-	let expandedFolders = new Set();
+	let selectedFile = null;
+	let expanded = true;
 
-	function toggleFolder(path) {
-		if (expandedFolders.has(path)) {
-			expandedFolders.delete(path);
-		} else {
-			expandedFolders.add(path);
-		}
-		expandedFolders = expandedFolders; // Trigger reactivity
+	function handleFileSelect(file) {
+		selectedFile = file;
+		onFileSelect(file);
 	}
 
-	function getFileIcon(filename) {
-		if (filename.endsWith('.js')) return '📄';
-		if (filename.endsWith('.css')) return '🎨';
-		if (filename.endsWith('.html') || filename.endsWith('.svelte')) return '🌐';
-		if (filename.endsWith('.json')) return '📦';
-		return '📄';
+	function toggleExpanded() {
+		expanded = !expanded;
 	}
 </script>
 
 <div class="file-tree">
 	<div class="tree-header">EXPLORER</div>
 	<div class="tree-content">
-		{#each files as file}
-			<div class="file-item" on:click={() => onFileSelect(file)}>
-				<span class="file-icon">{getFileIcon(file.name)}</span>
-				<span class="file-name">{file.name}</span>
+		<div class="tree-item">
+			<div class="item-header" on:click={toggleExpanded}>
+				<span class="icon">
+					{#if expanded}
+						▼
+					{:else}
+						▶
+					{/if}
+				</span>
+				<span class="icon">📁</span>
+				<span class="name">.agent</span>
 			</div>
-		{/each}
+			{#if expanded}
+				{#each files as file}
+					<div class="tree-item child">
+						<div
+							class="item-header {selectedFile === file ? 'selected' : ''}"
+							on:click={() => handleFileSelect(file)}
+						>
+							<span class="icon">
+								{#if file.type === 'directory'}
+									📁
+								{:else if file.name.endsWith('.js')}
+									📄
+								{:else if file.name.endsWith('.html')}
+									🌐
+								{:else}
+									📄
+								{/if}
+							</span>
+							<span class="name">{file.name}</span>
+						</div>
+					</div>
+				{/each}
+			{/if}
+		</div>
 	</div>
 </div>
 
 <style>
 	.file-tree {
-		background-color: rgb(30, 31, 34);
-		color: #e5e5e5;
-		height: 100%;
 		width: 250px;
+		height: 100%;
+		background-color: rgb(37, 37, 38);
+		color: #e5e5e5;
 		border-right: 1px solid rgba(255, 255, 255, 0.1);
+		display: flex;
+		flex-direction: column;
 	}
 
 	.tree-header {
 		padding: 10px;
-		font-size: 0.8rem;
-		font-weight: bold;
-		color: #9ca3af;
-		border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+		font-size: 11px;
+		font-weight: 600;
+		color: #969696;
+		text-transform: uppercase;
+		letter-spacing: 1px;
 	}
 
 	.tree-content {
-		padding: 8px;
+		flex: 1;
+		overflow-y: auto;
 	}
 
-	.file-item {
+	.tree-item {
+		font-size: 13px;
+	}
+
+	.tree-item.child {
+		margin-left: 16px;
+	}
+
+	.item-header {
 		display: flex;
 		align-items: center;
 		padding: 4px 8px;
 		cursor: pointer;
-		border-radius: 4px;
-		font-size: 0.9rem;
+		user-select: none;
 	}
 
-	.file-item:hover {
+	.item-header:hover {
 		background-color: rgba(255, 255, 255, 0.1);
 	}
 
-	.file-icon {
-		margin-right: 8px;
+	.item-header.selected {
+		background-color: rgba(255, 255, 255, 0.05);
 	}
 
-	.file-name {
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
+	.icon {
+		margin-right: 4px;
+		display: flex;
+		align-items: center;
+	}
+
+	.name {
+		margin-left: 4px;
 	}
 </style>

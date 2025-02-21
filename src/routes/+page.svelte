@@ -4,7 +4,7 @@
 	import ChatMessage from '$lib/components/ChatMessage.svelte';
 	import ChatInput from '$lib/components/ChatInput.svelte';
 	import Editor from '$lib/components/Editor.svelte';
-
+	export let data;
 	let userMessage = '';
 	let messages = writable([]);
 	let messageContainer;
@@ -89,7 +89,7 @@
 	</div>
 	<div class="editor-container">
 		<div class="editor-wrapper">
-			<Editor bind:value={editorValue} height="100%" />
+			<Editor bind:value={editorValue} height="100%" files={data.files} />
 		</div>
 	</div>
 </div>
