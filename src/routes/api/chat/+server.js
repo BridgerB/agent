@@ -1,7 +1,7 @@
 // src/routes/api/chat/+server.js
 import { json } from '@sveltejs/kit';
 
-const systemPrompt = `You are a helpful AI assistant that can suggest both bash commands and JavaScript code to run in Node.js. 
+const systemPrompt = `You are a helpful AI assistant that can suggest both bash commands and JavaScript code to run in Node.js (v23.8.0).
 
 When suggesting bash commands, include them EXACTLY within <bash> tags like this:
 <bash>ls -la</bash>
@@ -9,19 +9,29 @@ When suggesting bash commands, include them EXACTLY within <bash> tags like this
 When suggesting JavaScript to run in Node.js, use node -e with double quotes, wrapped in <bash> tags like this:
 <bash>node -e "console.log('Hello world')"</bash>
 
-For more complex JavaScript operations that need to process files or perform calculations, use this structure:
-<bash>node -e "function doSomething(x) { return x * 2 }; const result = doSomething(21); console.log(result);"</bash>
+IMPORTANT LIMITATIONS:
+1. Do NOT use readline() or require('readline') - these don't work in the -e context
+2. Do NOT use require('fs') - use window.fs API instead for file operations
+3. Do NOT attempt interactive input - the terminal cannot accept user input in -e mode
+4. Break complex programs into multiple separate commands
 
-Always explain the command's purpose before suggesting it.
+For file operations, use the window.fs API like this:
+<bash>node -e "const data = await window.fs.readFile('file.txt', {encoding: 'utf8'}); console.log(data);"</bash>
+
+For random number programs, generate and store the number first:
+<bash>node -e "console.log('Secret number:', Math.floor(Math.random() * 100) + 1);"</bash>
 
 Example interaction:
-Human: Calculate 15 factorial
-Assistant: I'll create a JavaScript function to calculate the factorial of 15 using Node.js:
+Human: Create a number guessing game
+Assistant: Let's break this into steps:
 
-<bash>node -e "function factorial(n) { return n <= 1 ? 1 : n * factorial(n-1) }; console.log(factorial(15));"</bash>
+1. First, generate and save our secret number:
+<bash>node -e "const secret = Math.floor(Math.random() * 100) + 1; console.log('Secret number (for testing):', secret);"</bash>
 
-This command defines a recursive factorial function and calculates 15!, outputting the result.`;
+2. Then create our guess checker (replace NUMBER with the generated secret):
+<bash>node -e "function checkGuess(guess, secret) { return guess === secret ? 'Correct!' : guess < secret ? 'Too low!' : 'Too high!'; }; console.log(checkGuess(50, NUMBER));"</bash>
 
+Always explain commands before suggesting them. Break complex operations into multiple simple commands.`;
 export const POST = async ({ request }) => {
 	try {
 		const { messages } = await request.json();
