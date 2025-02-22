@@ -4,15 +4,22 @@
 	export let onFileSelect = () => {};
 
 	let selectedFile = null;
-	let expanded = true;
+	let rootExpanded = true; // Add state for root folder
 
 	function handleFileSelect(file) {
-		selectedFile = file;
-		onFileSelect(file);
+		if (file.type === 'file') {
+			selectedFile = file;
+			onFileSelect({ ...file, name: file.path });
+		}
 	}
 
-	function toggleExpanded() {
-		expanded = !expanded;
+	function toggleDir(dir) {
+		dir.expanded = !dir.expanded;
+		files = [...files]; // Trigger reactivity
+	}
+
+	function toggleRoot() {
+		rootExpanded = !rootExpanded;
 	}
 </script>
 
@@ -20,9 +27,19 @@
 	<div class="tree-header">EXPLORER</div>
 	<div class="tree-content">
 		<div class="tree-item">
-			<div class="item-header" on:click={toggleExpanded}>
+			<div
+				class="item-header"
+				role="button"
+				tabindex="0"
+				on:click={toggleRoot}
+				on:keydown={(e) => {
+					if (e.key === 'Enter' || e.key === ' ') {
+						toggleRoot();
+					}
+				}}
+			>
 				<span class="icon">
-					{#if expanded}
+					{#if rootExpanded}
 						▼
 					{:else}
 						▶
@@ -31,27 +48,96 @@
 				<span class="icon">📁</span>
 				<span class="name">.agent</span>
 			</div>
-			{#if expanded}
-				{#each files as file}
-					<div class="tree-item child">
-						<div
-							class="item-header {selectedFile === file ? 'selected' : ''}"
-							on:click={() => handleFileSelect(file)}
-						>
-							<span class="icon">
-								{#if file.type === 'directory'}
-									📁
-								{:else if file.name.endsWith('.js')}
-									📄
-								{:else if file.name.endsWith('.html')}
-									🌐
-								{:else}
-									📄
-								{/if}
-							</span>
-							<span class="name">{file.name}</span>
+
+			{#if rootExpanded}
+				{#each files as item}
+					{#if item.type === 'directory'}
+						<div class="tree-item child">
+							<div
+								class="item-header"
+								on:click={() => toggleDir(item)}
+								on:keydown={(e) => {
+									if (e.key === 'Enter' || e.key === ' ') {
+										toggleDir(item);
+									}
+								}}
+								role="button"
+								tabindex="0"
+							>
+								<span class="icon">
+									{#if item.expanded}
+										▼
+									{:else}
+										▶
+									{/if}
+								</span>
+								<span class="icon">📁</span>
+								<span class="name">{item.name}</span>
+							</div>
+
+							{#if item.expanded && item.children}
+								{#each item.children as child}
+									<div class="tree-item child">
+										<div
+											class="item-header {selectedFile === child ? 'selected' : ''}"
+											on:click={() => handleFileSelect(child)}
+											on:keydown={(e) => {
+												if (e.key === 'Enter' || e.key === ' ') {
+													handleFileSelect(child);
+												}
+											}}
+											role="button"
+											tabindex="0"
+										>
+											<span class="icon">
+												{#if child.name.endsWith('.js')}
+													📄
+												{:else if child.name.endsWith('.html')}
+													🌐
+												{:else if child.name.endsWith('.css')}
+													🎨
+												{:else if child.name.endsWith('.svg')}
+													🖼
+												{:else}
+													📄
+												{/if}
+											</span>
+											<span class="name">{child.name}</span>
+										</div>
+									</div>
+								{/each}
+							{/if}
 						</div>
-					</div>
+					{:else}
+						<div class="tree-item child">
+							<div
+								class="item-header {selectedFile === item ? 'selected' : ''}"
+								on:click={() => handleFileSelect(item)}
+								on:keydown={(e) => {
+									if (e.key === 'Enter' || e.key === ' ') {
+										handleFileSelect(item);
+									}
+								}}
+								role="button"
+								tabindex="0"
+							>
+								<span class="icon">
+									{#if item.name.endsWith('.js')}
+										📄
+									{:else if item.name.endsWith('.html')}
+										🌐
+									{:else if item.name.endsWith('.css')}
+										🎨
+									{:else if item.name.endsWith('.svg')}
+										🖼
+									{:else}
+										📄
+									{/if}
+								</span>
+								<span class="name">{item.name}</span>
+							</div>
+						</div>
+					{/if}
 				{/each}
 			{/if}
 		</div>
