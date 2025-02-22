@@ -1,77 +1,26 @@
 // src/routes/api/chat/+server.js
 import { json } from '@sveltejs/kit';
-import { VM } from 'vm2';
 
-// Function to execute code safely
-async function executeCode(code) {
-	const vm = new VM({
-		timeout: 5000,
-		sandbox: {
-			console: {
-				log: (...args) => {
-					output.push(...args);
-				}
-			}
-		}
-	});
+// Updated system prompt with correct bash tag usage
+const systemPrompt = `You are a helpful AI assistant with the ability to execute bash commands. When you want to execute commands, include them EXACTLY within <bash> tags like this:
 
-	const output = [];
+<bash>ls -la</bash>
 
-	try {
-		// Wrap code to capture return value
-		const wrappedCode = `
-            (function() {
-                const result = (async () => {
-                    ${code}
-                })();
-                return result;
-            })()
-        `;
+The system will execute any commands within <bash> tags and return the results. 
 
-		const result = await vm.run(wrappedCode);
-		return {
-			success: true,
-			result,
-			output
-		};
-	} catch (error) {
-		return {
-			success: false,
-			error: error.message,
-			output
-		};
-	}
-}
+Some key points:
+- Commands must be inside <bash> tags to be executed
+- Results will be automatically provided after execution
+- Multiple commands can be included in one block:
 
-// Updated system prompt with clearer execution instructions
-const systemPrompt = `You are a helpful AI assistant with the ability to execute JavaScript code. When a user asks you to write and run code, follow these steps exactly:
+<bash>
+pwd
+ls -la
+</bash>
 
-1. First explain what you'll do
-2. Write the complete code wrapped in triple backticks with 'javascript' as the language specifier
-3. Do not write phrases like "Let me run this" or try to execute code by writing '{executeCode}' - the system will automatically execute code blocks
-4. After the code block, say "Running the code..." so the system knows to execute it
-5. After execution, explain the results
+Always explain the command's purpose before running it and interpret the results after seeing them.
 
-Example correct format:
-"I'll write a function to calculate prime numbers.
-
-\`\`\`javascript
-function isPrime(n) {
-    // code here
-}
-isPrime(7);
-\`\`\`
-
-Running the code...
-
-The result shows that 7 is prime."
-
-Remember:
-- Don't try to execute code yourself - just write "Running the code..."
-- Keep code blocks complete and self-contained
-- Always include any necessary function calls in the code block
-- Handle errors gracefully
-- Explain results after execution`;
+WARNING: Do not try to simulate or predict command output - wait for actual execution results.`;
 
 export const POST = async ({ request }) => {
 	try {
@@ -80,9 +29,8 @@ export const POST = async ({ request }) => {
 		// Add system prompt to the beginning of the conversation
 		const augmentedMessages = [{ role: 'system', content: systemPrompt }, ...messages];
 
-		let currentCodeBlock = '';
-		let isCollectingCode = false;
-		let shouldExecuteCode = false;
+		let currentBashContent = '';
+		let isCollectingBash = false;
 
 		const chatResponse = await fetch('http://localhost:11434/api/chat', {
 			method: 'POST',
@@ -90,11 +38,14 @@ export const POST = async ({ request }) => {
 			body: JSON.stringify({
 				model: 'llama3.1:8b',
 				messages: augmentedMessages,
-				stream: true
+				stream: true,
+				options: {
+					num_ctx: 9999
+				}
 			})
 		});
 
-		// Create stream transformer to handle code execution
+		// Create stream transformer to handle bash execution
 		const transformer = new TransformStream({
 			async transform(chunk, controller) {
 				const text = new TextDecoder().decode(chunk);
@@ -104,56 +55,62 @@ export const POST = async ({ request }) => {
 					const parsed = JSON.parse(line);
 					if (!parsed.message?.content) continue;
 
-					const content = parsed.message.content;
+					let content = parsed.message.content;
 
-					// Check for code block start
-					if (content.includes('```javascript')) {
-						isCollectingCode = true;
-						currentCodeBlock = '';
-						controller.enqueue(chunk);
-						continue;
-					}
+					// Find any bash commands in the content
+					const bashRegex = /<bash>([\s\S]*?)<\/bash>/g;
+					let match;
+					let lastIndex = 0;
+					let modifiedContent = '';
 
-					// Check for code block end
-					if (isCollectingCode && content.includes('```')) {
-						isCollectingCode = false;
-						shouldExecuteCode = true;
-						controller.enqueue(chunk);
-						continue;
-					}
+					while ((match = bashRegex.exec(content)) !== null) {
+						// Add any text before the bash block
+						modifiedContent += content.slice(lastIndex, match.index);
 
-					// Collect code
-					if (isCollectingCode) {
-						currentCodeBlock += content;
-					}
+						const bashCommand = match[1].trim();
+						lastIndex = match.index + match[0].length;
 
-					// Check for execution trigger
-					if (
-						!isCollectingCode &&
-						shouldExecuteCode &&
-						content.toLowerCase().includes('running the code')
-					) {
-						shouldExecuteCode = false;
-						// Execute the collected code
-						const result = await executeCode(currentCodeBlock);
+						try {
+							// Execute the bash command
+							const response = await fetch('/api/bash', {
+								method: 'POST',
+								headers: { 'Content-Type': 'application/json' },
+								body: JSON.stringify({ command: bashCommand })
+							});
 
-						// Send execution results
-						const resultMessage = {
-							message: {
-								role: 'assistant',
-								content: `\nExecution results:\n${
-									result.success
-										? `${result.output.length ? 'Output:\n' + result.output.join('\n') : ''}${
-												result.result !== undefined ? '\nReturn value: ' + result.result : ''
-											}`
-										: `Error: ${result.error}`
-								}\n`
+							const result = await response.json();
+
+							// Add the command and its results
+							modifiedContent += `<bash>${bashCommand}</bash>\n\nCommand output:\n`;
+							if (result.success) {
+								if (result.stdout) modifiedContent += `stdout:\n${result.stdout}\n`;
+								if (result.stderr) modifiedContent += `stderr:\n${result.stderr}\n`;
+							} else {
+								modifiedContent += `Error: ${result.error}\n`;
 							}
-						};
-						controller.enqueue(new TextEncoder().encode(JSON.stringify(resultMessage) + '\n'));
+						} catch (error) {
+							modifiedContent += `Error executing command: ${error.message}\n`;
+						}
 					}
 
-					controller.enqueue(chunk);
+					// Add any remaining content after the last bash block
+					modifiedContent += content.slice(lastIndex);
+
+					// Send the modified content
+					if (modifiedContent) {
+						controller.enqueue(
+							new TextEncoder().encode(
+								JSON.stringify({
+									message: {
+										role: 'assistant',
+										content: modifiedContent
+									}
+								}) + '\n'
+							)
+						);
+					} else {
+						controller.enqueue(chunk);
+					}
 				}
 			}
 		});
