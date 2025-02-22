@@ -1,7 +1,6 @@
 <!-- src/lib/components/Editor.svelte -->
 <script>
 	import { onMount, onDestroy } from 'svelte';
-	import loader from '@monaco-editor/loader';
 	import { browser } from '$app/environment';
 	import FileTree from './FileTree.svelte';
 	import Terminal from './Terminal.svelte';
@@ -9,50 +8,36 @@
 
 	export let value = '// Start coding here...';
 	export let language = 'javascript';
-	export let theme = 'vs-dark';
 	export let files = [];
 
 	let editorContainer;
 	let editor;
-	let monaco;
 
 	onMount(async () => {
-		if (browser && editorContainer) {
-			try {
-				monaco = await loader.init();
+		if (!browser) return; // Only run in browser
 
-				editor = monaco.editor.create(editorContainer, {
+		try {
+			const { default: initialize } = await import('vscode-web');
+			editor = await initialize({
+				container: editorContainer,
+				options: {
+					uri: 'file:///sample.js',
 					value,
 					language,
-					theme,
-					automaticLayout: true,
-					minimap: {
-						enabled: true
-					},
-					scrollBeyondLastLine: false,
-					fontSize: 14,
-					lineNumbers: 'on',
-					roundedSelection: false,
-					scrollBars: 'vertical',
-					readOnly: false,
-					cursorStyle: 'line',
-					fixedOverflowWidgets: true
-				});
+					theme: 'vs-dark'
+				}
+			});
 
-				editor.onDidChangeModelContent(() => {
-					const newValue = editor.getValue();
-					value = newValue;
-				});
-			} catch (error) {
-				console.error('Failed to load Monaco Editor:', error);
-			}
+			editor.onDidChangeModelContent(() => {
+				value = editor.getValue();
+			});
+		} catch (error) {
+			console.error('Failed to initialize vscode-web:', error);
 		}
 	});
 
 	onDestroy(() => {
-		if (editor) {
-			editor.dispose();
-		}
+		if (editor) editor.dispose();
 	});
 
 	$: if (editor && value !== editor.getValue()) {
@@ -69,6 +54,23 @@
 			cancelable: true
 		});
 		form.dispatchEvent(submitEvent);
+	}
+
+	$: if (editor && files.length) {
+		const input = document.getElementById('filename-input');
+		const ext = files
+			.find((f) => f.name === input?.value)
+			?.name.split('.')
+			.pop()
+			.toLowerCase();
+		const languageMap = {
+			js: 'javascript',
+			html: 'html',
+			css: 'css',
+			json: 'json'
+		};
+		language = languageMap[ext] || 'plaintext';
+		editor.getModel().setLanguage(language);
 	}
 </script>
 
@@ -94,7 +96,8 @@
 
 					if (editor) {
 						const model = editor.getModel();
-						monaco.editor.setModelLanguage(model, language);
+						model.setValue(value);
+						model.setLanguage(language);
 					}
 				}
 			};
@@ -112,6 +115,7 @@
 </div>
 
 <style>
+	/* Same styles as before */
 	.editor-with-tree {
 		display: flex;
 		width: 100%;
