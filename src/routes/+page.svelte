@@ -4,11 +4,13 @@
 	import ChatMessage from '$lib/components/ChatMessage.svelte';
 	import ChatInput from '$lib/components/ChatInput.svelte';
 	import Editor from '$lib/components/Editor.svelte';
+	import Terminal from '$lib/components/Terminal.svelte';
 	export let data;
 	let userMessage = '';
 	let messages = writable([]);
 	let messageContainer;
 	let editorValue = '// Write your code here...';
+	let terminalComponent;
 
 	// Auto-scroll to bottom when messages update
 	$: if (messageContainer && $messages) {
@@ -39,29 +41,44 @@
 
 		const reader = response.body.getReader();
 		const decoder = new TextDecoder();
-		let done = false;
 		let buffer = '';
 
-		while (!done) {
-			const { value, done: readerDone } = await reader.read();
-			done = readerDone;
-			buffer += decoder.decode(value, { stream: !readerDone });
+		while (true) {
+			const { value, done } = await reader.read();
+			if (done) break;
 
-			try {
-				const jsonChunks = buffer.split('\n').filter(Boolean);
-				for (const chunk of jsonChunks) {
-					const parsedChunk = JSON.parse(chunk);
-					if (parsedChunk.message?.content) {
+			buffer += decoder.decode(value, { stream: true });
+			const lines = buffer.split('\n');
+			buffer = lines.pop() || '';
+
+			for (const line of lines) {
+				try {
+					const parsed = JSON.parse(line);
+					if (parsed.message?.content) {
+						console.log('Received content:', parsed.message.content);
+						// Check for command markers
+						const content = parsed.message.content;
+						const bashRegex = /<bash>([\s\S]*?)<\/bash>/g;
+						let match;
+
+						while ((match = bashRegex.exec(content)) !== null) {
+							const command = match[1].trim();
+							console.log('Found command to execute:', command);
+							if (terminalComponent) {
+								await terminalComponent.simulateCommand(command);
+							}
+						}
+
 						messages.update((current) => {
 							const lastMessage = current[current.length - 1];
 							if (lastMessage?.role === 'agent') {
-								lastMessage.content += parsedChunk.message.content;
+								lastMessage.content += content;
 							} else {
 								current = [
 									...current,
 									{
 										role: 'agent',
-										content: parsedChunk.message.content,
+										content,
 										timestamp: new Date().toISOString()
 									}
 								];
@@ -69,10 +86,9 @@
 							return current;
 						});
 					}
+				} catch (error) {
+					console.error('Error processing message:', error);
 				}
-				buffer = '';
-			} catch (error) {
-				console.error(error);
 			}
 		}
 	}
@@ -85,12 +101,13 @@
 				<ChatMessage {...message} />
 			{/each}
 		</div>
-		<ChatInput bind:userMessage onSendMessage={handleSendMessage} />
+		<ChatInput bind:userMessage {handleSendMessage} />
 	</div>
 	<div class="editor-container">
 		<div class="editor-wrapper">
 			<Editor bind:value={editorValue} height="100%" files={data.files} />
 		</div>
+		<Terminal bind:this={terminalComponent} />
 	</div>
 </div>
 
@@ -122,6 +139,7 @@
 
 	.editor-container {
 		display: flex;
+		flex-direction: column;
 		height: 100%;
 		background-color: rgba(30, 31, 34, 0.95);
 		border-radius: 4px;
@@ -130,6 +148,6 @@
 
 	.editor-wrapper {
 		flex: 1;
-		height: 100%;
+		height: 70%;
 	}
 </style>

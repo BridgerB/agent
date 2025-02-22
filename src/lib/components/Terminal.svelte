@@ -14,8 +14,42 @@
 	let commandHistory = [];
 	let historyIndex = -1;
 
+	// Expose the simulateCommand method to parent components
+	export async function simulateCommand(command) {
+		console.log('Simulating command:', command);
+		if (!terminal) {
+			console.error('Terminal not initialized');
+			return;
+		}
+
+		// Clear current command if any
+		while (currentCommand.length > 0) {
+			currentCommand = currentCommand.slice(0, -1);
+			terminal.write('\b \b');
+		}
+
+		// Type out the command with delay
+		for (const char of command) {
+			currentCommand += char;
+			terminal.write(char);
+			await new Promise((resolve) => setTimeout(resolve, 50)); // Delay between characters
+		}
+
+		// Execute the command (simulate Enter key)
+		terminal.write('\r\n');
+		if (currentCommand.trim()) {
+			commandHistory.push(currentCommand);
+			historyIndex = commandHistory.length;
+			await executeCommand(currentCommand);
+			currentCommand = '';
+		} else {
+			terminal.write(`\r\n${currentPath} $ `);
+		}
+	}
+
 	async function executeCommand(command) {
 		try {
+			console.log('Executing command:', command);
 			// Handle cd command specially
 			if (command.trim().startsWith('cd')) {
 				const path = command.trim().split(' ')[1] || '~';
@@ -75,6 +109,7 @@
 
 			terminal.write(`\r\n${currentPath} $ `);
 		} catch (error) {
+			console.error('Error executing command:', error);
 			terminal.writeln('\x1b[31mError executing command: ' + error.message + '\x1b[0m');
 			terminal.write(`\r\n${currentPath} $ `);
 		}
@@ -82,6 +117,7 @@
 
 	onMount(async () => {
 		if (browser) {
+			console.log('Mounting terminal component');
 			// Dynamically import xterm modules
 			const xtermModule = await import('xterm');
 			const fitModule = await import('xterm-addon-fit');

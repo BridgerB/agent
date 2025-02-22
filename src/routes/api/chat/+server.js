@@ -1,36 +1,17 @@
 // src/routes/api/chat/+server.js
 import { json } from '@sveltejs/kit';
 
-// Updated system prompt with correct bash tag usage
-const systemPrompt = `You are a helpful AI assistant with the ability to execute bash commands. When you want to execute commands, include them EXACTLY within <bash> tags like this:
+const systemPrompt = `You are a helpful AI assistant that can suggest bash commands. When you want to run commands, include them EXACTLY within <bash> tags like this:
 
 <bash>ls -la</bash>
 
-The system will execute any commands within <bash> tags and return the results. 
-
-Some key points:
-- Commands must be inside <bash> tags to be executed
-- Results will be automatically provided after execution
-- Multiple commands can be included in one block:
-
-<bash>
-pwd
-ls -la
-</bash>
-
-Always explain the command's purpose before running it and interpret the results after seeing them.
-
-WARNING: Do not try to simulate or predict command output - wait for actual execution results.`;
+Always explain the command's purpose before suggesting it.`;
 
 export const POST = async ({ request }) => {
 	try {
 		const { messages } = await request.json();
 
-		// Add system prompt to the beginning of the conversation
 		const augmentedMessages = [{ role: 'system', content: systemPrompt }, ...messages];
-
-		let currentBashContent = '';
-		let isCollectingBash = false;
 
 		const chatResponse = await fetch('http://localhost:11434/api/chat', {
 			method: 'POST',
@@ -45,72 +26,57 @@ export const POST = async ({ request }) => {
 			})
 		});
 
-		// Create stream transformer to handle bash execution
 		const transformer = new TransformStream({
+			start() {
+				this.bufferedContent = '';
+				this.messageCount = 0;
+			},
 			async transform(chunk, controller) {
 				const text = new TextDecoder().decode(chunk);
 				const lines = text.split('\n').filter(Boolean);
 
 				for (const line of lines) {
-					const parsed = JSON.parse(line);
-					if (!parsed.message?.content) continue;
+					try {
+						const parsed = JSON.parse(line);
+						if (!parsed.message?.content) continue;
 
-					let content = parsed.message.content;
+						this.bufferedContent += parsed.message.content;
+						this.messageCount++;
 
-					// Find any bash commands in the content
-					const bashRegex = /<bash>([\s\S]*?)<\/bash>/g;
-					let match;
-					let lastIndex = 0;
-					let modifiedContent = '';
+						if (this.bufferedContent.trim() && parsed.done !== false) {
+							controller.enqueue(
+								new TextEncoder().encode(
+									JSON.stringify({
+										message: {
+											role: 'assistant',
+											content: this.bufferedContent
+										}
+									}) + '\n'
+								)
+							);
 
-					while ((match = bashRegex.exec(content)) !== null) {
-						// Add any text before the bash block
-						modifiedContent += content.slice(lastIndex, match.index);
-
-						const bashCommand = match[1].trim();
-						lastIndex = match.index + match[0].length;
-
-						try {
-							// Execute the bash command
-							const response = await fetch('/api/bash', {
-								method: 'POST',
-								headers: { 'Content-Type': 'application/json' },
-								body: JSON.stringify({ command: bashCommand })
-							});
-
-							const result = await response.json();
-
-							// Add the command and its results
-							modifiedContent += `<bash>${bashCommand}</bash>\n\nCommand output:\n`;
-							if (result.success) {
-								if (result.stdout) modifiedContent += `stdout:\n${result.stdout}\n`;
-								if (result.stderr) modifiedContent += `stderr:\n${result.stderr}\n`;
-							} else {
-								modifiedContent += `Error: ${result.error}\n`;
+							if (parsed.done) {
+								this.bufferedContent = '';
+								this.messageCount = 0;
 							}
-						} catch (error) {
-							modifiedContent += `Error executing command: ${error.message}\n`;
 						}
+					} catch (error) {
+						// Silent error handling
 					}
-
-					// Add any remaining content after the last bash block
-					modifiedContent += content.slice(lastIndex);
-
-					// Send the modified content
-					if (modifiedContent) {
-						controller.enqueue(
-							new TextEncoder().encode(
-								JSON.stringify({
-									message: {
-										role: 'assistant',
-										content: modifiedContent
-									}
-								}) + '\n'
-							)
-						);
-					} else {
-						controller.enqueue(chunk);
-					}
+				}
+			},
+			flush(controller) {
+				if (this.bufferedContent.trim()) {
+					controller.enqueue(
+						new TextEncoder().encode(
+							JSON.stringify({
+								message: {
+									role: 'assistant',
+									content: this.bufferedContent
+								}
+							}) + '\n'
+						)
+					);
 				}
 			}
 		});
@@ -121,7 +87,6 @@ export const POST = async ({ request }) => {
 			}
 		});
 	} catch (error) {
-		console.error('Error in chat request:', error);
 		return json({ error: 'Failed to process request' }, { status: 500 });
 	}
 };

@@ -1,6 +1,6 @@
 /**
  * @fileoverview Script to clear destination directory and copy all files from src directory to /data/claud/ in a flat structure,
- * excluding the lib/server/model/data folder. Includes 'src_' prefix in output filenames.
+ * excluding the lib/server/model/data folder. Includes 'src_' prefix in output filenames and appends .txt extension.
  * @author Claude
  */
 
@@ -86,16 +86,17 @@ async function clearDirectory(dir) {
 }
 
 /**
- * Gets a flat filename by replacing directory separators with underscores and adding 'src_' prefix
+ * Gets a flat filename by replacing directory separators with underscores,
+ * adding 'src_' prefix, and appending .txt extension
  * @param {string} filePath - Original file path
  * @param {string} sourceDir - Source directory to strip from path
- * @returns {string} Flattened filename with src_ prefix
+ * @returns {string} Flattened filename with src_ prefix and .txt extension
  */
 function getFlatFilename(filePath, sourceDir) {
 	// Remove the source directory from the path and trim any leading separator
 	const relativePath = filePath.replace(sourceDir, '').replace(/^[/\\]/, '');
-	// Replace all directory separators with underscores and add src_ prefix
-	return 'src_' + relativePath.replace(/[/\\]/g, '_');
+	// Replace all directory separators with underscores and add src_ prefix and .txt suffix
+	return 'src_' + relativePath.replace(/[/\\]/g, '_') + '.txt';
 }
 
 /**

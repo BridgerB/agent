@@ -1,6 +1,6 @@
 <!-- src/lib/components/ChatInput.svelte -->
 <script>
-	export let onSendMessage;
+	export let handleSendMessage;
 	export let userMessage = '';
 </script>
 
@@ -8,10 +8,10 @@
 	<input
 		type="text"
 		bind:value={userMessage}
-		on:keydown={(e) => e.key === 'Enter' && !e.shiftKey && onSendMessage()}
+		on:keydown={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
 		placeholder="Type your message..."
 	/>
-	<button on:click={onSendMessage} disabled={!userMessage.trim()}> Send </button>
+	<button on:click={handleSendMessage} disabled={!userMessage.trim()}> Send </button>
 </div>
 
 <style>
