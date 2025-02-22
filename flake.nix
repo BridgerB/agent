@@ -12,8 +12,7 @@
     in {
       devShells.default = pkgs.mkShell {
         buildInputs = with pkgs; [
-          nodejs_23
-          xdotool
+
         ];
       };
     }) // {
@@ -26,6 +25,9 @@
 
             environment.systemPackages = with pkgs; [
               nodejs_23
+          xdotool
+          toybox
+          tree
             ];
 
             users.users.agent = {

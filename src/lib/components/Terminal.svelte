@@ -10,16 +10,58 @@
 	let FitAddon;
 	let WebLinksAddon;
 	let currentCommand = '';
-	let currentPath = '~';
+	let currentPath = '/home/agent';
 	let commandHistory = [];
 	let historyIndex = -1;
 
 	async function executeCommand(command) {
 		try {
+			// Handle cd command specially
+			if (command.trim().startsWith('cd')) {
+				const path = command.trim().split(' ')[1] || '~';
+
+				// Execute cd command with absolute path based on currentPath
+				let newPath;
+				if (path.startsWith('/')) {
+					newPath = path;
+				} else if (path === '~') {
+					newPath = '/home/agent';
+				} else if (path === '..') {
+					newPath = currentPath.split('/').slice(0, -1).join('/') || '/';
+				} else {
+					newPath = `${currentPath}/${path}`;
+				}
+
+				// Verify the path exists
+				const checkPath = await fetch('/api/bash', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						command: `test -d "${newPath}" && echo "exists"`,
+						cwd: currentPath
+					})
+				});
+
+				const checkResult = await checkPath.json();
+				if (checkResult.success && checkResult.stdout.trim() === 'exists') {
+					currentPath = newPath;
+					terminal.write(`\r\n${currentPath} $ `);
+					return;
+				} else {
+					terminal.writeln(`\r\ncd: no such directory: ${path}`);
+					terminal.write(`\r\n${currentPath} $ `);
+					return;
+				}
+			}
+
+			// For all other commands, execute with current working directory
 			const response = await fetch('/api/bash', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ command })
+				body: JSON.stringify({
+					command: `cd "${currentPath}" && ${command}`,
+					cwd: currentPath
+				})
 			});
 
 			const result = await response.json();
@@ -31,19 +73,6 @@
 				terminal.writeln('\x1b[31mError: ' + result.error + '\x1b[0m');
 			}
 
-			// Update current path after command execution
-			const pwdResponse = await fetch('/api/bash', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ command: 'pwd' })
-			});
-
-			const pwdResult = await pwdResponse.json();
-			if (pwdResult.success) {
-				currentPath = pwdResult.stdout.trim();
-			}
-
-			// Write new prompt
 			terminal.write(`\r\n${currentPath} $ `);
 		} catch (error) {
 			terminal.writeln('\x1b[31mError executing command: ' + error.message + '\x1b[0m');
@@ -144,18 +173,6 @@
 			// Initialize terminal
 			terminal.open(terminalElement);
 			fitAddon.fit();
-
-			// Get initial working directory
-			const pwdResponse = await fetch('/api/bash', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ command: 'pwd' })
-			});
-
-			const pwdResult = await pwdResponse.json();
-			if (pwdResult.success) {
-				currentPath = pwdResult.stdout.trim();
-			}
 
 			// Write welcome message
 			terminal.writeln('Welcome to the terminal! Connected to your system.');
