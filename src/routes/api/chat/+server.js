@@ -32,6 +32,7 @@ Assistant: Let's break this into steps:
 <bash>node -e "function checkGuess(guess, secret) { return guess === secret ? 'Correct!' : guess < secret ? 'Too low!' : 'Too high!'; }; console.log(checkGuess(50, NUMBER));"</bash>
 
 Always explain commands before suggesting them. Break complex operations into multiple simple commands.`;
+
 export const POST = async ({ request }) => {
 	try {
 		const { messages } = await request.json();
