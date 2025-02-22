@@ -46,7 +46,7 @@
 					{/if}
 				</span>
 				<span class="icon">📁</span>
-				<span class="name">.agent</span>
+				<span class="name">folder</span>
 			</div>
 
 			{#if rootExpanded}

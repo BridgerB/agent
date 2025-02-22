@@ -1,18 +1,49 @@
 // src/routes/+page.server.js
-import { readdir, readFile, stat } from 'fs/promises';
 import { error } from '@sveltejs/kit';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import path from 'path';
+
+const execPromise = promisify(exec);
+
+// Helper function to execute command in container
+async function executeInContainer(command) {
+	const escapedCommand = command.replace(/'/g, "'\\''");
+	const containerCommand = `sudo nixos-container run agent -- su -l agent -c 'HOME=/home/agent ${escapedCommand}'`;
+	return await execPromise(containerCommand, {
+		timeout: 30000,
+		maxBuffer: 1024 * 1024
+	});
+}
 
 async function getDirectoryContents(dirPath, relativePath = '') {
 	try {
-		const entries = await readdir(dirPath, { withFileTypes: true });
+		// List directory contents using ls -la and parse the output
+		const { stdout } = await executeInContainer(`ls -la "${dirPath}"`);
+		const entries = stdout
+			.split('\n')
+			.slice(1) // Skip total line
+			.map((line) => {
+				const parts = line.trim().split(/\s+/);
+				if (parts.length < 9) return null;
+
+				const name = parts.slice(8).join(' ');
+				if (name === '.' || name === '..') return null;
+
+				const isDir = parts[0].startsWith('d');
+				const size = parseInt(parts[4]);
+				const modified = new Date(parts.slice(5, 8).join(' ')).toISOString();
+
+				return { name, isDir, size, modified };
+			})
+			.filter((entry) => entry !== null);
+
 		const contents = await Promise.all(
 			entries.map(async (entry) => {
 				const fullPath = path.join(dirPath, entry.name);
 				const entryRelativePath = path.join(relativePath, entry.name);
-				const stats = await stat(fullPath);
 
-				if (entry.isDirectory()) {
+				if (entry.isDir) {
 					const children = await getDirectoryContents(fullPath, entryRelativePath);
 					return {
 						name: entry.name,
@@ -20,8 +51,8 @@ async function getDirectoryContents(dirPath, relativePath = '') {
 						path: entryRelativePath,
 						children,
 						expanded: false,
-						size: stats.size,
-						modified: stats.mtime
+						size: entry.size,
+						modified: entry.modified
 					};
 				}
 
@@ -29,8 +60,8 @@ async function getDirectoryContents(dirPath, relativePath = '') {
 					name: entry.name,
 					type: 'file',
 					path: entryRelativePath,
-					size: stats.size,
-					modified: stats.mtime
+					size: entry.size,
+					modified: entry.modified
 				};
 			})
 		);
@@ -48,8 +79,11 @@ async function getDirectoryContents(dirPath, relativePath = '') {
 
 export async function load() {
 	try {
-		const workingDir = path.join(process.cwd(), '.agent');
+		const workingDir = '/home/agent/git/time';
 		console.log('Reading directory recursively:', workingDir);
+
+		// Ensure .agent directory exists in container
+		await executeInContainer('mkdir -p /home/agent/git/time');
 
 		const fileList = await getDirectoryContents(workingDir);
 		console.log('File structure built:', JSON.stringify(fileList, null, 2));
@@ -76,43 +110,26 @@ export const actions = {
 			}
 
 			// Join the path correctly with the .agent directory
-			const filePath = path.join(process.cwd(), '.agent', filename);
+			const filePath = path.join('/home/agent/git/time', filename);
 
-			// Verify the path is within the .agent directory
-			const normalizedPath = path.normalize(filePath);
-			const normalizedRoot = path.normalize(path.join(process.cwd(), '.agent'));
+			// Read file content from container
+			const { stdout: content } = await executeInContainer(`cat "${filePath}"`);
 
-			if (!normalizedPath.startsWith(normalizedRoot)) {
-				throw new Error('Invalid file path');
-			}
+			// Get file stats
+			const { stdout: statsStr } = await executeInContainer(
+				`stat --printf="%s\\n%Y\\n%W" "${filePath}"`
+			);
+			const [size, mtime, birthtime] = statsStr.split('\n').map(Number);
 
-			console.log('Full file path:', filePath);
-
-			// Verify file exists
-			try {
-				const fileStats = await stat(filePath);
-				if (!fileStats.isFile()) {
-					throw new Error('Not a file');
+			return {
+				success: true,
+				content,
+				metadata: {
+					size: parseInt(size),
+					modified: new Date(mtime * 1000),
+					created: new Date(birthtime * 1000)
 				}
-
-				const content = await readFile(filePath, 'utf-8');
-				console.log('File content loaded, length:', content.length);
-
-				return {
-					success: true,
-					content,
-					metadata: {
-						size: fileStats.size,
-						modified: fileStats.mtime,
-						created: fileStats.birthtime
-					}
-				};
-			} catch (statErr) {
-				if (statErr.code === 'ENOENT') {
-					throw new Error(`File not found: ${filename}`);
-				}
-				throw statErr;
-			}
+			};
 		} catch (err) {
 			console.error('Error reading file:', err);
 			return {
