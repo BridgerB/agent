@@ -1,3 +1,4 @@
+<!-- src/lib/components/ChatMessage.svelte -->
 <script>
 	export let role;
 	export let content;
