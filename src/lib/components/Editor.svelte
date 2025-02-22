@@ -4,12 +4,12 @@
 	import loader from '@monaco-editor/loader';
 	import { browser } from '$app/environment';
 	import FileTree from './FileTree.svelte';
+	import Terminal from './Terminal.svelte';
 	import { enhance } from '$app/forms';
 
 	export let value = '// Start coding here...';
 	export let language = 'javascript';
 	export let theme = 'vs-dark';
-	export let height = '500px';
 	export let files = [];
 
 	let editorContainer;
@@ -59,13 +59,11 @@
 		editor.setValue(value);
 	}
 
-	// Handle form submission and file selection
 	function handleFileSelect(file) {
 		const form = document.getElementById('file-form');
 		const input = document.getElementById('filename-input');
 		input.value = file.name;
 
-		// Use the form's submit handler
 		const submitEvent = new Event('submit', {
 			bubbles: true,
 			cancelable: true
@@ -105,7 +103,12 @@
 		<input type="hidden" id="filename-input" name="filename" />
 		<FileTree {files} onFileSelect={handleFileSelect} />
 	</form>
-	<div class="editor-container" bind:this={editorContainer} style="height: {height};"></div>
+	<div class="right-panel">
+		<div class="editor-container" bind:this={editorContainer}></div>
+		<div class="terminal-wrapper">
+			<Terminal />
+		</div>
+	</div>
 </div>
 
 <style>
@@ -116,8 +119,24 @@
 		background-color: rgb(30, 30, 30);
 	}
 
+	.right-panel {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+	}
+
 	.editor-container {
 		flex: 1;
+		min-height: 0;
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		border-radius: 4px;
+		overflow: hidden;
+		margin-bottom: 8px;
+	}
+
+	.terminal-wrapper {
+		height: 30vh;
 		border: 1px solid rgba(255, 255, 255, 0.1);
 		border-radius: 4px;
 		overflow: hidden;
