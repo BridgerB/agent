@@ -6,7 +6,7 @@ export default defineConfig({
 		port: 4173
 	},
 	use: {
-		headless: true
+		headless: false
 	},
 	testDir: 'e2e'
 });
