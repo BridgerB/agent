@@ -4,33 +4,34 @@
   description = "Node.js/SvelteKit development environment based on the Filesystem Hierarchy Standard (FHS)";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
   };
 
-  outputs = { nixpkgs, ... } @ inputs:
-  let
+  outputs = {nixpkgs, ...} @ inputs: let
     system = "x86_64-linux";
     pkgs = nixpkgs.legacyPackages.${system};
 
     # Node.js version
     nodejs = pkgs.nodejs_20;
-  in
-  {
-    devShells.${system}.default = (pkgs.buildFHSEnv (pkgs.appimageTools.defaultFhsEnvArgs // {
+  in {
+    devShells.${system}.default =
+      (pkgs.buildFHSEnv (pkgs.appimageTools.defaultFhsEnvArgs
+        // {
           name = "node-development-environment";
-          targetPkgs = pkgs: with pkgs; [
-            # Node.js and npm
-            nodejs
-            # Build essentials
-            gcc
-            gnumake
-            # Version control
-            git
-            # Timezones
-            tzdata
-            # Locales
-            glibcLocales
-          ];
+          targetPkgs = pkgs:
+            with pkgs; [
+              # Node.js and npm
+              nodejs
+              # Build essentials
+              gcc
+              gnumake
+              # Version control
+              git
+              # Timezones
+              tzdata
+              # Locales
+              glibcLocales
+            ];
           profile = ''
             # Set NODE_PATH to include global node modules
             export NODE_PATH="${nodejs}/lib/node_modules";
@@ -56,6 +57,7 @@
             echo "Node.js version: $(node --version)"
             echo "npm version: $(npm --version)"
           '';
-        })).env;
+        }))
+      .env;
   };
 }
