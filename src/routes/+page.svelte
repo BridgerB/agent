@@ -30,7 +30,6 @@
 		console.log('Bash command result:', result);
 		return result;
 	}
-
 	async function streamAIResponse(messageList) {
 		const response = await fetch('/api/chat', {
 			method: 'POST',
@@ -45,7 +44,7 @@
 		const reader = response.body.getReader();
 		const decoder = new TextDecoder();
 		let fullContent = '';
-		let bashCommands = [];
+		let lastBashCommand = null; // Only store the last bash command
 		const bashRegex = /<bash>([\s\S]*?)<\/bash>/g;
 		const thinkRegex = /<think>[\s\S]*?<\/think>/g;
 
@@ -83,36 +82,32 @@
 
 						// Process content for bash commands, excluding those in think blocks
 						let contentToProcess = fullContent;
-						// Completely remove think blocks before bash processing
+						// Remove think blocks before bash processing
 						contentToProcess = contentToProcess.replace(thinkRegex, '');
 
-						// Extract bash commands from the processed content
+						// Find all bash commands and keep only the last one
 						let match;
 						bashRegex.lastIndex = 0; // Reset regex index
+						lastBashCommand = null; // Reset before re-evaluating
 						while ((match = bashRegex.exec(contentToProcess)) !== null) {
-							const command = match[1].trim();
-							if (!bashCommands.includes(command)) {
-								bashCommands.push(command);
-							}
+							lastBashCommand = match[1].trim(); // Overwrite with the latest command
 						}
 					}
-					if (parsed.done) {
-						// Process bash commands after streaming completes
-						for (const command of bashCommands) {
-							const result = await executeBashCommand(command);
-							const outputContent = result.success
-								? `Command: \`${command}\`\nOutput:\n\`\`\`\n${result.stdout || 'No output'}\n\`\`\``
-								: `Command: \`${command}\`\nError:\n\`\`\`\n${result.stderr || result.error || 'Unknown error'}\n\`\`\``;
+					if (parsed.done && lastBashCommand) {
+						// Execute only the last bash command after streaming completes
+						const result = await executeBashCommand(lastBashCommand);
+						const outputContent = result.success
+							? `Command: \`${lastBashCommand}\`\nOutput:\n\`\`\`\n${result.stdout || 'No output'}\n\`\`\``
+							: `Command: \`${lastBashCommand}\`\nError:\n\`\`\`\n${result.stderr || result.error || 'Unknown error'}\n\`\`\``;
 
-							messages.update((current) => [
-								...current,
-								{
-									role: 'system',
-									content: outputContent,
-									timestamp: new Date().toISOString()
-								}
-							]);
-						}
+						messages.update((current) => [
+							...current,
+							{
+								role: 'system',
+								content: outputContent,
+								timestamp: new Date().toISOString()
+							}
+						]);
 					}
 				} catch (error) {
 					console.error('Error parsing stream line:', error, 'Line:', line);
