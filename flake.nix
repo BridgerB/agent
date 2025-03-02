@@ -28,6 +28,7 @@
               xdotool
               toybox
               tree
+              tmux  # Add tmux to the container
             ];
 
             users.users.agent = {
@@ -37,6 +38,21 @@
             };
 
             security.sudo.wheelNeedsPassword = false;
+
+            # Automatically start a tmux session when the container boots
+            systemd.services.agent-tmux = {
+              description = "Start tmux session for agent";
+              wantedBy = ["multi-user.target"];
+              serviceConfig = {
+                Type = "oneshot";
+                RemainAfterExit = true;
+                ExecStart = ''
+                  ${pkgs.tmux}/bin/tmux new-session -d -s agent-session -c /home/agent
+                '';
+                User = "agent";
+                Group = "users";
+              };
+            };
           })
         ];
       };

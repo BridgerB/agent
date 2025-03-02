@@ -5,12 +5,13 @@
 	export let timestamp;
 
 	function formatMessage(content) {
+		// Escape <bash> tags to display them literally
+		content = content.replace(/<bash>/g, '&lt;bash&gt;').replace(/<\/bash>/g, '&lt;/bash&gt;');
+
 		// Handle code blocks
 		content = content.replace(/```([\s\S]*?)```/gi, (match, code) => {
 			const trimmedCode = code.trim();
-			return `
-				<pre><code>${trimmedCode}</code></pre>
-			`;
+			return `<pre><code>${trimmedCode}</code></pre>`;
 		});
 
 		// Handle inline code

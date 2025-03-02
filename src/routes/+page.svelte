@@ -3,17 +3,27 @@
 	import { writable } from 'svelte/store';
 	import ChatMessage from '$lib/components/ChatMessage.svelte';
 	import ChatInput from '$lib/components/ChatInput.svelte';
-	import Terminal from '$lib/components/Terminal.svelte';
 	let userMessage = '';
 	let messages = writable([]);
 	let messageContainer;
-	let terminalComponent;
 
 	// Auto-scroll to bottom when messages update
 	$: if (messageContainer && $messages) {
 		setTimeout(() => {
 			messageContainer.scrollTop = messageContainer.scrollHeight;
 		}, 0);
+	}
+
+	async function executeBashCommand(command) {
+		console.log('Executing bash command:', command);
+		const response = await fetch('/api/bash', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ command })
+		});
+		const result = await response.json();
+		console.log('Bash command result:', result);
+		return result;
 	}
 
 	async function handleSendMessage() {
@@ -39,6 +49,7 @@
 		const reader = response.body.getReader();
 		const decoder = new TextDecoder();
 		let buffer = '';
+		let fullContent = ''; // Accumulate full AI response
 
 		while (true) {
 			const { value, done } = await reader.read();
@@ -52,30 +63,19 @@
 				try {
 					const parsed = JSON.parse(line);
 					if (parsed.message?.content) {
-						console.log('Received content:', parsed.message.content);
-						// Check for command markers
-						const content = parsed.message.content;
-						const bashRegex = /<bash>([\s\S]*?)<\/bash>/g;
-						let match;
-
-						while ((match = bashRegex.exec(content)) !== null) {
-							const command = match[1].trim();
-							console.log('Found command to execute:', command);
-							if (terminalComponent) {
-								await terminalComponent.simulateCommand(command);
-							}
-						}
+						console.log('Received chat content chunk:', parsed.message.content);
+						fullContent += parsed.message.content;
 
 						messages.update((current) => {
 							const lastMessage = current[current.length - 1];
 							if (lastMessage?.role === 'agent') {
-								lastMessage.content += content;
+								lastMessage.content += parsed.message.content;
 							} else {
 								current = [
 									...current,
 									{
 										role: 'agent',
-										content,
+										content: parsed.message.content,
 										timestamp: new Date().toISOString()
 									}
 								];
@@ -84,9 +84,18 @@
 						});
 					}
 				} catch (error) {
-					console.error('Error processing message:', error);
+					console.error('Error processing chat message:', error);
 				}
 			}
+		}
+
+		// After the full response is received, check for and execute <bash> commands
+		console.log('Full AI response:', fullContent);
+		const bashRegex = /<bash>([\s\S]*?)<\/bash>/g;
+		let match;
+		while ((match = bashRegex.exec(fullContent)) !== null) {
+			const command = match[1].trim();
+			await executeBashCommand(command);
 		}
 	}
 </script>
@@ -100,20 +109,14 @@
 		</div>
 		<ChatInput bind:userMessage {handleSendMessage} />
 	</div>
-	<div class="editor-container">
-		<div class="editor-wrapper"></div>
-		<Terminal bind:this={terminalComponent} />
-	</div>
 </div>
 
 <style>
 	.app-container {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
+		display: flex;
 		height: 100vh;
 		background-color: rgb(17, 18, 18);
 		color: #e5e5e5;
-		gap: 1rem;
 		padding: 1rem;
 	}
 
@@ -121,6 +124,7 @@
 		display: flex;
 		flex-direction: column;
 		height: 100%;
+		width: 100%;
 	}
 
 	.messages {
@@ -130,19 +134,5 @@
 		scroll-behavior: smooth;
 		background-color: rgba(30, 31, 34, 0.95);
 		border-radius: 4px;
-	}
-
-	.editor-container {
-		display: flex;
-		flex-direction: column;
-		height: 100%;
-		background-color: rgba(30, 31, 34, 0.95);
-		border-radius: 4px;
-		overflow: hidden;
-	}
-
-	.editor-wrapper {
-		flex: 1;
-		height: 70%;
 	}
 </style>

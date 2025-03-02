@@ -36,8 +36,10 @@ Always explain commands before suggesting them. Break complex operations into mu
 export const POST = async ({ request }) => {
 	try {
 		const { messages } = await request.json();
+		console.log('Chat API received messages:', messages); // Log incoming messages
 
 		const augmentedMessages = [{ role: 'system', content: systemPrompt }, ...messages];
+		console.log('Augmented messages sent to AI:', augmentedMessages); // Log messages with system prompt
 
 		const chatResponse = await fetch('http://localhost:11434/api/chat', {
 			method: 'POST',
@@ -51,6 +53,7 @@ export const POST = async ({ request }) => {
 				}
 			})
 		});
+		console.log('Chat API request sent, status:', chatResponse.status); // Log AI request status
 
 		const transformer = new TransformStream({
 			start() {
@@ -69,7 +72,10 @@ export const POST = async ({ request }) => {
 						this.bufferedContent += parsed.message.content;
 						this.messageCount++;
 
+						console.log('Received AI content chunk:', parsed.message.content); // Log each chunk
+
 						if (this.bufferedContent.trim() && parsed.done !== false) {
+							console.log('Sending response chunk:', this.bufferedContent); // Log final chunk
 							controller.enqueue(
 								new TextEncoder().encode(
 									JSON.stringify({
@@ -87,12 +93,13 @@ export const POST = async ({ request }) => {
 							}
 						}
 					} catch (error) {
-						console.error(error);
+						console.error('Error parsing AI response line:', error, 'Line:', line);
 					}
 				}
 			},
 			flush(controller) {
 				if (this.bufferedContent.trim()) {
+					console.log('Flushing remaining content:', this.bufferedContent); // Log flush
 					controller.enqueue(
 						new TextEncoder().encode(
 							JSON.stringify({
@@ -113,6 +120,7 @@ export const POST = async ({ request }) => {
 			}
 		});
 	} catch (error) {
-		return json({ error: error }, { status: 500 });
+		console.error('Chat API error:', error); // Log any top-level errors
+		return json({ error: error.message }, { status: 500 });
 	}
 };
