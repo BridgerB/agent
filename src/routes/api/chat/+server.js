@@ -26,7 +26,12 @@ export const POST = async ({ request }) => {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
-				model: 'nemotron-mini:4b',
+				// model: 'llama3.1:8b',
+				// model: 'nemotron-mini:4b',
+				// model: 'deepseek-r1:32b',
+				// model: 'deepseek-r1:14b',
+				model: 'deepseek-r1:8b',
+				// model: 'deepseek-r1:1.5b',
 				messages: augmentedMessages,
 				stream: true,
 				options: { num_ctx: 9999 }
