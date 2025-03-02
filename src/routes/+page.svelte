@@ -6,31 +6,27 @@
 	let userMessage = '';
 	let messages = writable([]);
 	let messageContainer;
-	let lastScrollTop = 0; // Track the last scroll position
+	let lastScrollTop = 0;
 
-	// Smart auto-scroll: only scroll to bottom if user is near the bottom or just sent a message
+	// Smart auto-scroll: only scroll to bottom if user is near the bottom
 	function autoScroll() {
 		if (!messageContainer) return;
-
 		const { scrollTop, scrollHeight, clientHeight } = messageContainer;
-		const isNearBottom = scrollTop + clientHeight >= scrollHeight - 50; // 50px tolerance
-
-		// Only scroll if the user was already near the bottom
+		const isNearBottom = scrollTop + clientHeight >= scrollHeight - 50;
 		if (isNearBottom) {
-			setTimeout(() => {
-				messageContainer.scrollTop = messageContainer.scrollHeight;
-			}, 0);
+			messageContainer.scrollTop = messageContainer.scrollHeight;
 		}
 	}
 
-	// Update scroll tracking on user scroll
+	// Track user scroll position
 	function handleScroll() {
 		lastScrollTop = messageContainer.scrollTop;
 	}
 
-	// Watch for message updates and trigger smart auto-scroll
+	// Trigger auto-scroll on message updates
 	$: if ($messages) autoScroll();
 
+	// Execute bash command and return result
 	async function executeBashCommand(command) {
 		console.log('Executing bash command:', command);
 		const response = await fetch('/api/bash', {
@@ -43,17 +39,24 @@
 		return result;
 	}
 
-	async function fetchAIResponse(messageList) {
+	// Stream AI response and process dynamically
+	async function streamAIResponse(messageList, onComplete) {
 		const response = await fetch('/api/chat', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ messages: messageList })
 		});
 
+		if (!response.ok) {
+			throw new Error('Failed to fetch AI response');
+		}
+
 		const reader = response.body.getReader();
 		const decoder = new TextDecoder();
 		let buffer = '';
 		let fullContent = '';
+		let bashCommands = [];
+		const bashRegex = /<bash>([\s\S]*?)<\/bash>/g;
 
 		while (true) {
 			const { value, done } = await reader.read();
@@ -67,71 +70,47 @@
 				try {
 					const parsed = JSON.parse(line);
 					if (parsed.message?.content) {
-						console.log('Received chat content chunk:', parsed.message.content);
-						fullContent += parsed.message.content;
+						const chunk = parsed.message.content;
+						console.log('Streaming chunk:', chunk);
+						fullContent += chunk;
 
+						// Force immediate UI update for each chunk
 						messages.update((current) => {
 							const lastMessage = current[current.length - 1];
 							if (lastMessage?.role === 'agent') {
-								lastMessage.content += parsed.message.content;
+								lastMessage.content += chunk;
+								return [...current.slice(0, -1), { ...lastMessage }]; // Force new object
 							} else {
-								current = [
+								return [
 									...current,
 									{
 										role: 'agent',
-										content: parsed.message.content,
+										content: chunk,
 										timestamp: new Date().toISOString()
 									}
 								];
 							}
-							return current;
 						});
+
+						// Check for bash commands in the stream
+						let match;
+						while ((match = bashRegex.exec(fullContent)) !== null) {
+							const command = match[1].trim();
+							if (!bashCommands.includes(command)) {
+								bashCommands.push(command);
+							}
+						}
 					}
 				} catch (error) {
-					console.error('Error processing chat message:', error);
+					console.error('Error parsing chunk:', error, 'Line:', line);
 				}
 			}
 		}
-		return fullContent;
-	}
 
-	async function handleSendMessage() {
-		if (!userMessage.trim()) return;
-
-		// Add user message to the chat
-		const newMessages = [
-			...$messages,
-			{
-				role: 'user',
-				content: userMessage,
-				timestamp: new Date().toISOString()
-			}
-		];
-		messages.set(newMessages);
-		const originalUserMessage = userMessage;
-		userMessage = '';
-
-		// Force scroll to bottom after user sends a message
-		setTimeout(() => {
-			if (messageContainer) {
-				messageContainer.scrollTop = messageContainer.scrollHeight;
-			}
-		}, 0);
-
-		// Get initial AI response
-		const initialResponse = await fetchAIResponse(newMessages);
-		console.log('Initial AI response:', initialResponse);
-
-		// Check for and execute bash commands
-		const bashRegex = /<bash>([\s\S]*?)<\/bash>/g;
-		let match;
+		// Process commands and call onComplete after streaming ends
 		const commandOutputs = [];
-
-		while ((match = bashRegex.exec(initialResponse)) !== null) {
-			const command = match[1].trim();
+		for (const command of bashCommands) {
 			const result = await executeBashCommand(command);
-
-			// Add command output to the chat
 			const outputContent = result.success
 				? `Command: \`${command}\`\nOutput:\n\`\`\`\n${result.stdout || 'No output'}\n\`\`\``
 				: `Command: \`${command}\`\nError:\n\`\`\`\n${result.stderr || result.error || 'Unknown error'}\n\`\`\``;
@@ -151,25 +130,55 @@
 			});
 		}
 
-		// If commands were executed, re-prompt the AI with context
-		if (commandOutputs.length > 0) {
-			const followUpPrompt = `Original user message: "${originalUserMessage}"\nInitial AI response: "${initialResponse}"\nCommand outputs:\n${commandOutputs
-				.map((co) => `Command: "${co.command}"\nOutput: "${co.output}"`)
-				.join('\n')}`;
+		onComplete(fullContent, commandOutputs);
+	}
 
-			const followUpMessages = [
-				...newMessages,
-				{
-					role: 'system',
-					content: followUpPrompt,
-					timestamp: new Date().toISOString()
-				}
-			];
+	// Handle user message and orchestrate streaming
+	async function handleSendMessage() {
+		if (!userMessage.trim()) return;
 
-			// Get follow-up AI response
-			const followUpResponse = await fetchAIResponse(followUpMessages);
-			console.log('Follow-up AI response:', followUpResponse);
+		const newMessages = [
+			...$messages,
+			{
+				role: 'user',
+				content: userMessage,
+				timestamp: new Date().toISOString()
+			}
+		];
+		messages.set(newMessages);
+		const originalUserMessage = userMessage;
+		userMessage = '';
+
+		// Scroll to bottom when user sends a message
+		if (messageContainer) {
+			messageContainer.scrollTop = messageContainer.scrollHeight;
 		}
+
+		// Stream initial AI response
+		await streamAIResponse(newMessages, async (initialResponse, commandOutputs) => {
+			console.log('Initial AI response complete:', initialResponse);
+
+			// If commands were executed, re-prompt AI with context
+			if (commandOutputs.length > 0) {
+				const followUpPrompt = `Original user message: "${originalUserMessage}"\nInitial AI response: "${initialResponse}"\nCommand outputs:\n${commandOutputs
+					.map((co) => `Command: "${co.command}"\nOutput: "${co.output}"`)
+					.join('\n')}`;
+
+				const followUpMessages = [
+					...newMessages,
+					{
+						role: 'system',
+						content: followUpPrompt,
+						timestamp: new Date().toISOString()
+					}
+				];
+
+				// Stream follow-up AI response
+				await streamAIResponse(followUpMessages, (followUpResponse, _) => {
+					console.log('Follow-up AI response complete:', followUpResponse);
+				});
+			}
+		});
 	}
 </script>
 
