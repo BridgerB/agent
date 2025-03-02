@@ -8,28 +8,28 @@
 	let messages = writable([]);
 	let messageContainer;
 
+	// Auto-scroll to bottom when near the end
 	function autoScroll() {
 		if (!messageContainer) return;
 		const { scrollTop, scrollHeight, clientHeight } = messageContainer;
-		const isNearBottom = scrollTop + clientHeight >= scrollHeight - 50;
-		if (isNearBottom) {
-			messageContainer.scrollTop = messageContainer.scrollHeight;
+		if (scrollTop + clientHeight >= scrollHeight - 50) {
+			messageContainer.scrollTop = scrollHeight;
 		}
 	}
 
-	$: if ($messages) autoScroll();
+	$: $messages, autoScroll();
 
+	// Execute bash command via API
 	async function executeBashCommand(command) {
-		console.log('Executing bash command:', command);
 		const response = await fetch('/api/bash', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ command })
 		});
-		const result = await response.json();
-		console.log('Bash command result:', result);
-		return result;
+		return await response.json();
 	}
+
+	// Stream AI response and handle bash commands
 	async function streamAIResponse(messageList) {
 		const response = await fetch('/api/chat', {
 			method: 'POST',
@@ -37,14 +37,12 @@
 			body: JSON.stringify({ messages: messageList })
 		});
 
-		if (!response.ok) {
-			throw new Error('Failed to fetch AI response');
-		}
+		if (!response.ok) throw new Error('Failed to fetch AI response');
 
 		const reader = response.body.getReader();
 		const decoder = new TextDecoder();
 		let fullContent = '';
-		let lastBashCommand = null; // Only store the last bash command
+		let lastBashCommand = null;
 		const bashRegex = /<bash>([\s\S]*?)<\/bash>/g;
 		const thinkRegex = /<think>[\s\S]*?<\/think>/g;
 
@@ -62,77 +60,61 @@
 						const char = parsed.message.content;
 						fullContent += char;
 
-						// Update the last assistant message or create a new one
+						// Update or create assistant message
 						messages.update((current) => {
-							const lastMessage = current[current.length - 1];
-							if (lastMessage?.role === 'agent') {
-								lastMessage.content += char;
-								return [...current.slice(0, -1), { ...lastMessage }];
-							} else {
-								return [
-									...current,
-									{
-										role: 'agent',
-										content: char,
-										timestamp: new Date().toISOString()
-									}
-								];
+							const last = current[current.length - 1];
+							if (last?.role === 'agent') {
+								last.content += char;
+								return [...current.slice(0, -1), { ...last }];
 							}
+							return [
+								...current,
+								{ role: 'agent', content: char, timestamp: new Date().toISOString() }
+							];
 						});
 
-						// Process content for bash commands, excluding those in think blocks
-						let contentToProcess = fullContent;
-						// Remove think blocks before bash processing
-						contentToProcess = contentToProcess.replace(thinkRegex, '');
-
-						// Find all bash commands and keep only the last one
+						// Process bash commands, excluding think blocks
+						const contentToProcess = fullContent.replace(thinkRegex, '');
+						bashRegex.lastIndex = 0;
+						lastBashCommand = null;
 						let match;
-						bashRegex.lastIndex = 0; // Reset regex index
-						lastBashCommand = null; // Reset before re-evaluating
 						while ((match = bashRegex.exec(contentToProcess)) !== null) {
-							lastBashCommand = match[1].trim(); // Overwrite with the latest command
+							lastBashCommand = match[1].trim();
 						}
 					}
 					if (parsed.done && lastBashCommand) {
-						// Execute only the last bash command after streaming completes
 						const result = await executeBashCommand(lastBashCommand);
 						const outputContent = result.success
-							? `Command: \`${lastBashCommand}\`\nOutput:\n\`\`\`\n${result.stdout || 'No output'}\n\`\`\``
-							: `Command: \`${lastBashCommand}\`\nError:\n\`\`\`\n${result.stderr || result.error || 'Unknown error'}\n\`\`\``;
+							? result.stdout || 'No output'
+							: `${result.stderr || result.error || 'Unknown error'}`;
 
 						messages.update((current) => [
 							...current,
 							{
 								role: 'system',
 								content: outputContent,
-								timestamp: new Date().toISOString()
+								timestamp: new Date().toISOString(),
+								isTerminal: true // Flag for terminal styling
 							}
 						]);
 					}
 				} catch (error) {
-					console.error('Error parsing stream line:', error, 'Line:', line);
+					console.error('Error parsing stream:', error, 'Line:', line);
 				}
 			}
 		}
 	}
 
+	// Handle sending user message
 	async function handleSendMessage() {
 		if (!userMessage.trim()) return;
 
-		const newMessages = [
-			...$messages,
-			{
-				role: 'user',
-				content: userMessage,
-				timestamp: new Date().toISOString()
-			}
-		];
-		messages.set(newMessages);
+		messages.update((current) => [
+			...current,
+			{ role: 'user', content: userMessage, timestamp: new Date().toISOString() }
+		]);
+		const newMessages = $messages;
 		userMessage = '';
-
-		if (messageContainer) {
-			messageContainer.scrollTop = messageContainer.scrollHeight;
-		}
 
 		await streamAIResponse(newMessages);
 	}
@@ -142,7 +124,16 @@
 	<div class="chat-container">
 		<div class="messages" bind:this={messageContainer}>
 			{#each $messages as message}
-				<ChatMessage {...message} />
+				{#if message.isTerminal}
+					<div class="terminal-window">
+						<div class="terminal-header">
+							<span class="terminal-title">Terminal</span>
+						</div>
+						<pre class="terminal-output">{message.content}</pre>
+					</div>
+				{:else}
+					<ChatMessage {...message} />
+				{/if}
 			{/each}
 		</div>
 		<ChatInput bind:userMessage {handleSendMessage} />
@@ -153,7 +144,7 @@
 	.app-container {
 		display: flex;
 		height: 100vh;
-		background-color: rgb(17, 18, 18);
+		background-color: #111212;
 		color: #e5e5e5;
 		padding: 1rem;
 	}
@@ -161,8 +152,8 @@
 	.chat-container {
 		display: flex;
 		flex-direction: column;
-		height: 100%;
 		width: 100%;
+		height: 100%;
 	}
 
 	.messages {
@@ -170,7 +161,37 @@
 		overflow-y: auto;
 		padding: 1rem;
 		scroll-behavior: smooth;
-		background-color: rgba(30, 31, 34, 0.95);
-		border-radius: 4px;
+	}
+
+	.terminal-window {
+		background-color: #1e1e1e;
+		border-radius: 6px;
+		margin: 0.5rem 0;
+		max-width: 600px;
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+	}
+
+	.terminal-header {
+		background-color: #2d2d2d;
+		padding: 0.3rem 0.6rem;
+		border-top-left-radius: 6px;
+		border-top-right-radius: 6px;
+		display: flex;
+		align-items: center;
+	}
+
+	.terminal-title {
+		color: #999;
+		font-size: 0.8rem;
+	}
+
+	.terminal-output {
+		margin: 0;
+		padding: 0.8rem;
+		font-family: 'Courier New', monospace;
+		font-size: 0.9rem;
+		color: #00ff00;
+		white-space: pre-wrap;
+		word-wrap: break-word;
 	}
 </style>
