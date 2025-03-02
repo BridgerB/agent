@@ -2,15 +2,23 @@
 <script>
 	export let handleSendMessage;
 	export let userMessage = '';
+
+	// Function to adjust textarea height
+	function adjustHeight(event) {
+		const textarea = event.target;
+		textarea.style.height = 'auto'; // Reset height to auto to get correct scrollHeight
+		textarea.style.height = `${Math.min(textarea.scrollHeight, 500)}px`; // Set height to content or 500px max
+	}
 </script>
 
 <div class="input-area">
-	<input
-		type="text"
+	<textarea
 		bind:value={userMessage}
 		on:keydown={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
-		placeholder="Type your message..."
-	/>
+		on:input={adjustHeight}
+		placeholder="Type your message... (Shift+Enter for new line)"
+		rows="1"
+	></textarea>
 	<button on:click={handleSendMessage} disabled={!userMessage.trim()}> Send </button>
 </div>
 
@@ -23,7 +31,7 @@
 		border-top: 1px solid rgba(255, 255, 255, 0.1);
 	}
 
-	input {
+	textarea {
 		flex: 1;
 		padding: 0.75rem;
 		font-size: 1rem;
@@ -31,9 +39,14 @@
 		border: 1px solid rgba(255, 255, 255, 0.1);
 		border-radius: 0.375rem;
 		color: #e5e5e5;
+		resize: vertical;
+		min-height: 2.5rem;
+		line-height: 1.5;
+		max-height: 500px;
+		overflow-y: auto;
 	}
 
-	input:focus {
+	textarea:focus {
 		outline: none;
 		border-color: #2563eb;
 	}
