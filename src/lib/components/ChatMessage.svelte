@@ -7,6 +7,7 @@
 	function formatMessage(content) {
 		// Escape <bash> tags to display them literally
 		content = content.replace(/<bash>/g, '&lt;bash&gt;').replace(/<\/bash>/g, '&lt;/bash&gt;');
+		content = content.replace(/<think>/g, '&lt;think&gt;').replace(/<\/think>/g, '&lt;/think&gt;');
 
 		// Handle code blocks
 		content = content.replace(/```([\s\S]*?)```/gi, (match, code) => {

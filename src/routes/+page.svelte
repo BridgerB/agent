@@ -47,6 +47,7 @@
 		let fullContent = '';
 		let bashCommands = [];
 		const bashRegex = /<bash>([\s\S]*?)<\/bash>/g;
+		const thinkRegex = /<think>[\s\S]*?<\/think>/g;
 
 		while (true) {
 			const { value, done } = await reader.read();
@@ -80,9 +81,15 @@
 							}
 						});
 
-						// Detect bash commands as they stream in
+						// Process content for bash commands, excluding those in think blocks
+						let contentToProcess = fullContent;
+						// Completely remove think blocks before bash processing
+						contentToProcess = contentToProcess.replace(thinkRegex, '');
+
+						// Extract bash commands from the processed content
 						let match;
-						while ((match = bashRegex.exec(fullContent)) !== null) {
+						bashRegex.lastIndex = 0; // Reset regex index
+						while ((match = bashRegex.exec(contentToProcess)) !== null) {
 							const command = match[1].trim();
 							if (!bashCommands.includes(command)) {
 								bashCommands.push(command);

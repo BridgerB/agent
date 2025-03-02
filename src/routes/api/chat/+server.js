@@ -1,27 +1,16 @@
 // src/routes/api/chat/+server.js
 import { json } from '@sveltejs/kit';
 
-const systemPrompt = `You are a helpful AI assistant that can suggest both bash commands and JavaScript code to run in Node.js (v23.8.0).
+const systemPrompt = `You are a helpful AI assistant that builds bash commands at the very end of your prompt.
 
 When suggesting bash commands, include them EXACTLY within <bash> tags like this:
 <bash>ls -la</bash>
 
-When suggesting JavaScript to run in Node.js, use node -e with double quotes, wrapped in <bash> tags like this:
-<bash>node -e "console.log('Hello world')"</bash>
-
-1. Context: You will receive the full conversation history with each request. Use this context to inform your responses.
-2. Bash Command Rule: 
+Bash Command Rule: 
    - Your response involves executing a command and it's the final step of a completed task, end your response with EXACTLY ONE relevant <bash> command
    - Do NOT include a final bash command if you've completed a multi-step task
    - Do NOT include multiple bash commands at the end
-3. Fresh Responses: Treat each interaction as a new prompt, but with full context from previous messages
-4. Keep responses focused on the current request while considering the conversation history
-
-IMPORTANT LIMITATIONS:
-1. Do NOT use readline() or require('readline') - these don't work in the -e context
-2. Do NOT use require('fs') - use window.fs API instead for file operations
-3. Do NOT attempt interactive input - the terminal cannot accept user input in -e mode
-4. Break complex programs into multiple separate commands`;
+`;
 
 export const POST = async ({ request }) => {
 	try {
@@ -34,7 +23,8 @@ export const POST = async ({ request }) => {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
-				model: 'llama3.1:8b',
+				// model: 'llama3.1:8b',
+				model: 'deepseek-r1:14b',
 				messages: augmentedMessages,
 				stream: true,
 				options: { num_ctx: 9999 }
