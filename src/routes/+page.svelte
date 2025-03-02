@@ -3,7 +3,6 @@
 	import { writable } from 'svelte/store';
 	import ChatMessage from '$lib/components/ChatMessage.svelte';
 	import ChatInput from '$lib/components/ChatInput.svelte';
-	import Editor from '$lib/components/Editor.svelte';
 	import Terminal from '$lib/components/Terminal.svelte';
 	export let data;
 	let userMessage = '';
@@ -104,9 +103,7 @@
 		<ChatInput bind:userMessage {handleSendMessage} />
 	</div>
 	<div class="editor-container">
-		<div class="editor-wrapper">
-			<Editor bind:value={editorValue} height="100%" files={data.files} />
-		</div>
+		<div class="editor-wrapper"></div>
 		<Terminal bind:this={terminalComponent} />
 	</div>
 </div>
