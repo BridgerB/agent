@@ -2,7 +2,7 @@
   description = "LLM agent with mouse control capabilities";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -13,7 +13,6 @@
       devShells.default = pkgs.mkShell {
         buildInputs = with pkgs; [
           nodejs_23
-
         ];
       };
     }) // {
@@ -21,14 +20,14 @@
         system = "x86_64-linux";
         modules = [
           ({ pkgs, ... }: {
-            system.stateVersion = "23.11";
+            system.stateVersion = "24.11";
             boot.isContainer = true;
 
             environment.systemPackages = with pkgs; [
               nodejs_23
-          xdotool
-          toybox
-          tree
+              xdotool
+              toybox
+              tree
             ];
 
             users.users.agent = {
