@@ -1,15 +1,18 @@
 // src/routes/api/chat/+server.js
 import { json } from '@sveltejs/kit';
 
-const systemPrompt = `You are a helpful AI assistant that builds bash commands at the very end of your prompt.
+const systemPrompt = `You are a helpful AI assistant that can execute bash commands and respond to their output to complete tasks efficiently.
 
 When suggesting bash commands, include them EXACTLY within <bash> tags like this:
 <bash>ls -la</bash>
 
-Bash Command Rule: 
-   - Your response involves executing a command and it's the final step of a completed task, end your response with EXACTLY ONE relevant <bash> command
-   - Do NOT include a final bash command if you've completed a multi-step task
-   - Do NOT include multiple bash commands at the end
+Bash Command Rules:
+   - If a task requires executing a command to gather information (e.g., finding the current directory), include ONE <bash> command at the end of your response.
+   - When you receive a system message with "Terminal output:" followed by the result of a bash command, use that output to directly answer the user's question or complete the task.
+   - If the user's request is satisfied by the terminal output (e.g., "tell me your pwd" after seeing the output), provide the answer using the output and do NOT include another <bash> command.
+   - Do NOT suggest running the same bash command again if its output is already provided in the conversation.
+   - Only include a <bash> command if further execution is needed to progress the task beyond what the current output provides.
+   - Keep responses concise and focused on completing the task with the information available.
 `;
 
 export const POST = async ({ request }) => {
@@ -23,12 +26,7 @@ export const POST = async ({ request }) => {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
-				// model: 'llama3.1:8b',
 				model: 'nemotron-mini:4b',
-				// model: 'deepseek-r1:32b',
-				// model: 'deepseek-r1:14b',
-				// model: 'deepseek-r1:8b',
-				// model: 'deepseek-r1:1.5b',
 				messages: augmentedMessages,
 				stream: true,
 				options: { num_ctx: 9999 }
@@ -39,7 +37,6 @@ export const POST = async ({ request }) => {
 			throw new Error('Failed to fetch AI response');
 		}
 
-		// Custom TransformStream to stream each character
 		const transformer = new TransformStream({
 			transform(chunk, controller) {
 				const text = new TextDecoder().decode(chunk);
@@ -50,7 +47,6 @@ export const POST = async ({ request }) => {
 						const parsed = JSON.parse(line);
 						if (parsed.message?.content) {
 							const content = parsed.message.content;
-							// Stream each character individually
 							for (const char of content) {
 								controller.enqueue(
 									new TextEncoder().encode(

@@ -7,6 +7,7 @@
 	let userMessage = '';
 	let messages = writable([]);
 	let messageContainer;
+	let lastExecutedCommand = null; // Track the last executed command to prevent loops
 
 	// Auto-scroll to bottom when near the end
 	function autoScroll() {
@@ -31,6 +32,7 @@
 
 	// Stream AI response and handle bash commands
 	async function streamAIResponse(messageList) {
+		console.log('Streaming with messages:', JSON.stringify(messageList, null, 2));
 		const response = await fetch('/api/chat', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -42,7 +44,6 @@
 		const reader = response.body.getReader();
 		const decoder = new TextDecoder();
 		let fullContent = '';
-		let lastBashCommand = null;
 		const bashRegex = /<bash>([\s\S]*?)<\/bash>/g;
 		const thinkRegex = /<think>[\s\S]*?<\/think>/g;
 
@@ -73,30 +74,47 @@
 							];
 						});
 
-						// Process bash commands, excluding think blocks
+						// Process bash commands immediately when fully detected
 						const contentToProcess = fullContent.replace(thinkRegex, '');
 						bashRegex.lastIndex = 0;
-						lastBashCommand = null;
-						let match;
-						while ((match = bashRegex.exec(contentToProcess)) !== null) {
-							lastBashCommand = match[1].trim();
-						}
-					}
-					if (parsed.done && lastBashCommand) {
-						const result = await executeBashCommand(lastBashCommand);
-						const outputContent = result.success
-							? result.stdout || 'No output'
-							: `${result.stderr || result.error || 'Unknown error'}`;
+						const match = bashRegex.exec(contentToProcess);
+						if (match) {
+							const bashCommand = match[1].trim();
 
-						messages.update((current) => [
-							...current,
-							{
-								role: 'system',
-								content: outputContent,
-								timestamp: new Date().toISOString(),
-								isTerminal: true // Flag for terminal styling
+							// Skip if this command was just executed
+							if (bashCommand === lastExecutedCommand) {
+								console.log(`Skipping redundant command: ${bashCommand}`);
+								continue;
 							}
-						]);
+
+							// Execute the bash command
+							const result = await executeBashCommand(bashCommand);
+							const outputContent = result.success
+								? result.stdout || 'No output'
+								: `${result.stderr || result.error || 'Unknown error'}`;
+
+							lastExecutedCommand = bashCommand; // Update the last executed command
+
+							// Add the terminal output to the message list
+							messages.update((current) => [
+								...current,
+								{
+									role: 'system',
+									content: `Terminal output: ${outputContent}`,
+									timestamp: new Date().toISOString(),
+									isTerminal: true
+								}
+							]);
+
+							// Stop current stream and restart with updated context
+							await reader.cancel();
+							console.log(
+								'Restarting stream with updated messages:',
+								JSON.stringify($messages, null, 2)
+							);
+							await streamAIResponse($messages);
+							return;
+						}
 					}
 				} catch (error) {
 					console.error('Error parsing stream:', error, 'Line:', line);
@@ -109,6 +127,7 @@
 	async function handleSendMessage() {
 		if (!userMessage.trim()) return;
 
+		lastExecutedCommand = null; // Reset on new user message
 		messages.update((current) => [
 			...current,
 			{ role: 'user', content: userMessage, timestamp: new Date().toISOString() }
