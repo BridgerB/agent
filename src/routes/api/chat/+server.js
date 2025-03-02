@@ -87,7 +87,7 @@ export const POST = async ({ request }) => {
 							}
 						}
 					} catch (error) {
-						// Silent error handling
+						console.error(error);
 					}
 				}
 			},
@@ -113,6 +113,6 @@ export const POST = async ({ request }) => {
 			}
 		});
 	} catch (error) {
-		return json({ error: 'Failed to process request' }, { status: 500 });
+		return json({ error: error }, { status: 500 });
 	}
 };

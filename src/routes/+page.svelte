@@ -4,11 +4,9 @@
 	import ChatMessage from '$lib/components/ChatMessage.svelte';
 	import ChatInput from '$lib/components/ChatInput.svelte';
 	import Terminal from '$lib/components/Terminal.svelte';
-	export let data;
 	let userMessage = '';
 	let messages = writable([]);
 	let messageContainer;
-	let editorValue = '// Write your code here...';
 	let terminalComponent;
 
 	// Auto-scroll to bottom when messages update
