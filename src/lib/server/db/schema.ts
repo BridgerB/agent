@@ -5,6 +5,8 @@ export const user = pgTable('user', {
 	firebaseUid: text('firebase_uid').notNull().unique(),
 	email: text('email').notNull(),
 	displayName: text('display_name'),
+	important: text('important').default(''),
+	about: text('about').default(''),
 	createdAt: timestamp('created_at').defaultNow().notNull()
 });
 
