@@ -26,3 +26,4 @@ test-results
 agent-bridgerb-com-firebase-adminsdk-fbsvc-77a5cf9558.json
 admin.json
 .direnv/
+firebase-debug.log
