@@ -1,8 +1,13 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
+	import favicon from '$lib/assets/favicon.png';
 	import type { PageData, ActionData } from './$types';
 	import type { LayoutData } from '../$types';
 
 	let { data, form }: { data: PageData & LayoutData; form: ActionData } = $props();
+
+	const loggedIn = $derived(page.data.user !== null);
 
 	const providers = [
 		{
@@ -36,20 +41,28 @@
 
 <section class="profile">
 	<div class="profile-header">
-		{#if data.user?.picture}
-			<img
-				src={data.user.picture}
-				alt={data.user.name}
-				class="profile-avatar"
-				referrerpolicy="no-referrer"
-			/>
+		{#if loggedIn}
+			{#if data.user?.picture}
+				<img
+					src={data.user.picture}
+					alt={data.user.name}
+					class="profile-avatar"
+					referrerpolicy="no-referrer"
+				/>
+			{:else}
+				<div class="profile-avatar-placeholder">{data.user?.email?.[0]?.toUpperCase()}</div>
+			{/if}
+			<div class="profile-info">
+				<h3>{data.user?.name || 'User'}</h3>
+				<span>{data.user?.email}</span>
+			</div>
 		{:else}
-			<div class="profile-avatar-placeholder">{data.user?.email?.[0]?.toUpperCase()}</div>
+			<img src={favicon} alt="Sign in" class="profile-avatar" />
+			<div class="profile-info">
+				<h3>Not signed in</h3>
+				<a href={resolve('/login')} class="auth-link">Sign in to see your profile</a>
+			</div>
 		{/if}
-		<div class="profile-info">
-			<h3>{data.user?.name || 'User'}</h3>
-			<span>{data.user?.email}</span>
-		</div>
 	</div>
 </section>
 
@@ -62,11 +75,14 @@
 		<h2>About</h2>
 		<textarea
 			name="about"
+			disabled={!loggedIn}
 			placeholder="Help the agent understand you — your role, your team, what you're working on..."
 			>{data.about}</textarea
 		>
 	</section>
-	<button type="submit" class="btn-save">Save</button>
+	{#if loggedIn}
+		<button type="submit" class="btn-save">Save</button>
+	{/if}
 </form>
 
 <section class="integrations">
@@ -104,7 +120,7 @@
 							<button type="submit" class="btn-disconnect">Disconnect</button>
 						</form>
 					</div>
-				{:else}
+				{:else if loggedIn}
 					<form method="POST" action="?/save" class="card-form">
 						<input type="hidden" name="type" value={provider.type} />
 						<input type="text" name="username" placeholder="Username" required />
@@ -294,6 +310,7 @@
 
 	.card-form {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 0.5rem;
 		margin-top: 0.75rem;
 		padding-top: 0.75rem;
@@ -302,6 +319,7 @@
 
 	.card-form input {
 		flex: 1;
+		min-width: 0;
 		padding: 0.5rem 0.75rem;
 		border: 1px solid #444;
 		border-radius: 6px;
@@ -315,6 +333,7 @@
 	}
 
 	.card-form button {
+		width: 100%;
 		padding: 0.5rem 1rem;
 		border: none;
 		border-radius: 6px;
@@ -347,5 +366,20 @@
 		color: #4ade80;
 		background: rgba(74, 222, 128, 0.1);
 		border: 1px solid rgba(74, 222, 128, 0.2);
+	}
+
+	textarea:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.auth-link {
+		color: #818cf8;
+		font-size: 0.875rem;
+		text-decoration: none;
+	}
+
+	.auth-link:hover {
+		text-decoration: underline;
 	}
 </style>

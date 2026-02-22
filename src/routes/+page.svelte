@@ -1,7 +1,11 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import type { PageData, ActionData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
+
+	const loggedIn = $derived(page.data.user !== null);
 </script>
 
 <svelte:head>
@@ -11,18 +15,26 @@
 {#if form?.profileSaved}
 	<p class="toast success">Profile saved.</p>
 {/if}
+{#if form?.error}
+	<p class="toast error">{form.error}</p>
+{/if}
 
 <form method="POST" action="?/updateProfile" class="profile-fields">
 	<section class="field-section">
 		<h2>Important</h2>
 		<textarea
 			name="important"
+			disabled={!loggedIn}
 			placeholder="Context beyond Slack, Jira, and GitHub — priorities, blockers, things to keep top of mind..."
 			>{data.important}</textarea
 		>
 	</section>
 
-	<button type="submit" class="btn-save">Save</button>
+	{#if loggedIn}
+		<button type="submit" class="btn-save">Save</button>
+	{:else}
+		<a href={resolve('/login')} class="auth-prompt">Sign in to get started</a>
+	{/if}
 </form>
 
 <section class="tasks">
@@ -116,11 +128,35 @@
 		font-size: 0.875rem;
 	}
 
+	textarea:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.auth-prompt {
+		align-self: center;
+		color: #818cf8;
+		font-size: 0.875rem;
+		text-decoration: none;
+		padding: 0.5rem;
+		margin-bottom: 2rem;
+	}
+
+	.auth-prompt:hover {
+		text-decoration: underline;
+	}
+
 	.toast {
 		font-size: 0.875rem;
 		padding: 0.5rem 0.75rem;
 		border-radius: 6px;
 		margin-bottom: 1rem;
+	}
+
+	.toast.error {
+		color: #f87171;
+		background: rgba(248, 113, 113, 0.1);
+		border: 1px solid rgba(248, 113, 113, 0.2);
 	}
 
 	.toast.success {

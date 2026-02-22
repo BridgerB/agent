@@ -1,7 +1,4 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { resolve } from '$app/paths';
-
 	let loading = $state(false);
 	let error = $state('');
 
@@ -12,7 +9,7 @@
 			body: JSON.stringify({ idToken })
 		});
 		if (response.ok) {
-			goto(resolve('/'));
+			window.location.href = '/';
 			return null;
 		}
 		const data = await response.json();

@@ -1,7 +1,7 @@
 import { db } from '$lib/server/db';
 import { integration, user } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { fail, redirect } from '@sveltejs/kit';
+import { fail } from '@sveltejs/kit';
 import { encrypt } from '$lib/server/crypto';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -27,7 +27,7 @@ const getOrCreateUser = async (firebaseUser: { uid: string; email: string; name:
 };
 
 export const load: PageServerLoad = async ({ locals }) => {
-	if (!locals.user) throw redirect(302, '/login');
+	if (!locals.user) return { integrations: [], about: '' };
 
 	const userId = await getOrCreateUser(locals.user);
 
@@ -52,7 +52,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
 	save: async ({ request, locals }) => {
-		if (!locals.user) throw redirect(302, '/login');
+		if (!locals.user) return fail(401, { error: 'Sign in to connect integrations' });
 
 		const userId = await getOrCreateUser(locals.user);
 		const data = await request.formData();
@@ -83,7 +83,7 @@ export const actions: Actions = {
 	},
 
 	updateAbout: async ({ request, locals }) => {
-		if (!locals.user) throw redirect(302, '/login');
+		if (!locals.user) return fail(401, { error: 'Sign in to save' });
 
 		const userId = await getOrCreateUser(locals.user);
 		const data = await request.formData();
@@ -95,7 +95,7 @@ export const actions: Actions = {
 	},
 
 	remove: async ({ request, locals }) => {
-		if (!locals.user) throw redirect(302, '/login');
+		if (!locals.user) return fail(401, { error: 'Sign in to manage integrations' });
 
 		const userId = await getOrCreateUser(locals.user);
 		const data = await request.formData();

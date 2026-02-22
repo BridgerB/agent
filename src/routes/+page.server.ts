@@ -1,7 +1,7 @@
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
-import { redirect } from '@sveltejs/kit';
+import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
 const getOrCreateUser = async (firebaseUser: { uid: string; email: string; name: string }) => {
@@ -26,7 +26,7 @@ const getOrCreateUser = async (firebaseUser: { uid: string; email: string; name:
 };
 
 export const load: PageServerLoad = async ({ locals }) => {
-	if (!locals.user) throw redirect(302, '/login');
+	if (!locals.user) return { important: '' };
 
 	const userId = await getOrCreateUser(locals.user);
 
@@ -41,7 +41,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
 	updateProfile: async ({ request, locals }) => {
-		if (!locals.user) throw redirect(302, '/login');
+		if (!locals.user) return fail(401, { error: 'Sign in to save' });
 
 		const userId = await getOrCreateUser(locals.user);
 		const data = await request.formData();
